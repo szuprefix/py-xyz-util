@@ -314,7 +314,7 @@ class DateStat(object):
 
     def get_period_query_set(self, period):
         qset = self.query_set
-        if period:
+        if period and period != 'all':
             begin_time, end_time = dateutils.get_period_by_name(period)
             pms = {"%s__gte" % self.time_field: begin_time, "%s__lt" % self.time_field: end_time}
             qset = self.query_set.filter(**pms)

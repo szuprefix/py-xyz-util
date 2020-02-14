@@ -11,7 +11,7 @@ from django.utils.encoding import force_text
 import django.db.models.fields as djfields
 from django.forms.fields import TypedMultipleChoiceField
 from django.forms.widgets import CheckboxSelectMultiple
-from django.db.models import Count, Model, DateTimeField, Expression, IntegerField, QuerySet
+from django.db.models import Count, Model, DateTimeField, Expression, IntegerField, QuerySet, ForeignKey, ManyToManyField
 import json, re
 from .datautils import JSONEncoder, auto_code
 from . import formutils
@@ -297,20 +297,30 @@ class QuerysetDict(object):
 
 
 def translate_model_values(model, values, fields=[]):
+    from django.db.models.fields.reverse_related import ManyToManyRel
     if not values:
         return {}
-    from .datautils import choices_map_reverse
-    fs = [f for f in model._meta.local_fields if f.name in fields]
+    fs = [f for f in model._meta.get_fields() if f.name in fields]
     rs = {}
     for f in fs:
-        v = values.get(f.verbose_name)
-        if f.choices:
+        vbn = f.related_model._meta.verbose_name  if isinstance(f, ManyToManyRel) else f.verbose_name
+        v = values.get(vbn)
+        if isinstance(f, (ForeignKey, )):
+            fo, created = f.related_model.objects.get_or_create(name=v)
+            v = fo
+        elif isinstance(f, (ManyToManyRel, ManyToManyField)):
+            vs = []
+            for a in set([ a.strip() for a in v.split(',')]):
+                fo, created = f.related_model.objects.get_or_create(name=a)
+                vs.append(fo)
+            v = vs
+        elif f.choices:
+            from .datautils import choices_map_reverse
             m = choices_map_reverse(f.choices)
             v = m.get(v)
         if v is None and f.default != djfields.NOT_PROVIDED:
             v = f.default
         rs[f.name] = v
-        # print f.verbose_name, f.choices
 
     return rs
 
