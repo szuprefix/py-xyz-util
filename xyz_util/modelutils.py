@@ -190,10 +190,15 @@ def stat_by(qset, fields, group):
 RE_FIELD_SPLITER = re.compile(r"\.|__")
 
 
-def get_generic_foreign_key(meta):
+def find_field(m, find_func):
+    meta = m._meta if hasattr(m, '_meta') else m
     for f in meta.get_fields():
-        if isinstance(f, GenericForeignKey):
+        if find_func(f):
             return f
+
+
+def get_generic_foreign_key(meta):
+    return find_field(meta, lambda f: isinstance(f, GenericForeignKey))
 
 
 def get_related_fields(obj, field_name, start_position=0):
@@ -303,7 +308,7 @@ def translate_model_values(model, values, fields=[]):
     fs = [f for f in model._meta.get_fields() if f.name in fields]
     rs = {}
     for f in fs:
-        vbn = f.related_model._meta.verbose_name  if isinstance(f, ManyToManyRel) else f.verbose_name
+        vbn = f.related_model._meta.verbose_name if isinstance(f, ManyToManyRel) else f.verbose_name
         v = values.get(vbn)
         if isinstance(f, (ForeignKey, )):
             fo, created = f.related_model.objects.get_or_create(name=v)
@@ -364,3 +369,31 @@ def get_relations(m1, m2):
 def get_model_related_field(m1, m2):
     fs = [f for f in m1._meta.get_fields() if f.is_relation and f.related_model == m2]
     return fs[0] if fs else None
+
+
+def distinct(qset, field_name):
+    return qset.values(field_name).order_by(field_name).annotate().values_list(field_name, flat=True)
+
+
+def get_field_verbose_name(f):
+    return f.many_to_many and f.related_model._meta.verbose_name \
+           or hasattr(f, 'field') and f.field.verbose_name \
+           or f.verbose_name
+
+
+def get_model_verbose_name_map():
+    r = {}
+    for an, a in apps.all_models.iteritems():
+        for mn, m in a.iteritems():
+            mvn = m._meta.verbose_name
+            r.setdefault(mvn, []).append(m)
+    return r
+
+
+def get_model_field_verbose_name_map(m):
+    if isinstance(m, (str, unicode)):
+        m = apps.get_model(m)
+    r = {}
+    for f in m._meta.get_fields():
+        r[get_field_verbose_name(f)] = f
+    return r

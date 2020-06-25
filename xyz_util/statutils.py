@@ -219,19 +219,42 @@ class TimeStat(object):
         return r
 
 
-def count_by(qset, group, count_field='id', distinct=False, sort=None, group_map=None):
+def group_by(qset, group, measures=None, sort=None, group_map=None):
     if isinstance(group, (str, unicode)):
-        group = group.split(',')
+        group = [g.strip() for g in group.split(',') if g.strip()]
+    if not measures:
+        measures = [Count('id')]
     qset = qset.values(*group).order_by(*group)
-    dl = qset.annotate(c=Count(count_field, distinct=distinct))
+    from collections import OrderedDict
+    mm = OrderedDict()
+    for i, m in enumerate(measures):
+        fn = "f%d" % i
+        mm[fn] = m
+    dl = qset.annotate(**mm)
     if sort is not None:
-        dl = dl.order_by("%sc" % sort)
-    fs = group + ['c']
+        dl = dl.order_by("%sf0" % sort)
+    fs = group + mm.keys()
     rs = [[d[f] for f in fs] for d in dl]
     if group_map:
         for d in rs:
             d[0] = group_map.get(d[0], d[0])
     return rs
+
+
+def count_by(qset, group, count_field='id', distinct=False, sort=None, group_map=None):
+    return group_by(qset, group, measures=[Count(count_field, distinct=distinct)], sort=sort, group_map=group_map)
+    # if isinstance(group, (str, unicode)):
+    #     group = group.split(',')
+    # qset = qset.values(*group).order_by(*group)
+    # dl = qset.annotate(c=Count(count_field, distinct=distinct))
+    # if sort is not None:
+    #     dl = dl.order_by("%sc" % sort)
+    # fs = group + ['c']
+    # rs = [[d[f] for f in fs] for d in dl]
+    # if group_map:
+    #     for d in rs:
+    #         d[0] = group_map.get(d[0], d[0])
+    # return rs
 
 
 def count_by_generic_relation(qset, group, count_field='id', distinct=False, sort=None):
@@ -241,7 +264,9 @@ def count_by_generic_relation(qset, group, count_field='id', distinct=False, sor
         if isinstance(f, dict):
             ct = f['content_type']
             gfk = f['field']
-            prefix = "__".join([a.name for a in rfs[:-2]]) + "__"
+            prefix = "__".join([a.name for a in rfs[:-2]])
+            if prefix:
+                prefix += "__"
             cts = prefix + gfk.ct_field
             group = prefix + gfk.fk_field
             cond = {cts: ct.id}
@@ -256,6 +281,10 @@ def count_by_generic_relation(qset, group, count_field='id', distinct=False, sor
 
 
 def count_with_generic_relation(qset, group, count_field='id', trans_map={}):
+    return group_by_with_generic_relation(qset,group,measures=[Count(count_field)], trans_map=trans_map)
+
+
+def group_by_with_generic_relation(qset, group, measures=[], trans_map={}):
     from django.contrib.contenttypes.fields import GenericForeignKey
     from django.contrib.contenttypes.models import ContentType
     if isinstance(group, (str, unicode)):
@@ -267,13 +296,18 @@ def count_with_generic_relation(qset, group, count_field='id', trans_map={}):
         rfs = modelutils.get_related_fields(qset, g)
         lf = rfs[-1]
         if isinstance(lf, GenericForeignKey):
-            prefix = '__'.join(g.split('__')[:-1])
-            gs.append('%s__%s' % (prefix, lf.ct_field))
-            gs.append('%s__%s' % (prefix, lf.fk_field))
             p = i
+            ps = g.split('__')
+            if len(ps) > 1:
+                prefix = '__'.join(ps[:-1])
+                gs.append('%s__%s' % (prefix, lf.ct_field))
+                gs.append('%s__%s' % (prefix, lf.fk_field))
+            else:
+                gs.append(lf.ct_field)
+                gs.append(lf.fk_field)
         else:
             gs.append(g)
-    rs = count_by(qset, gs, count_field=count_field)
+    rs = group_by(qset, gs, measures=measures)
     ss = set([(r[p], r[p + 1]) for r in rs])
     sd = {}
     for ct, fk in ss:
@@ -284,13 +318,16 @@ def count_with_generic_relation(qset, group, count_field='id', trans_map={}):
             continue
         ct = ContentType.objects.get(id=ct_id)
         md = ct.model_class()
-        vls = trans_map.get('%s.%s' % (ct.app_label, ct.model), ['name'])
+        vls = trans_map.get(
+            '%s.%s' % (ct.app_label, ct.model),
+            [modelutils.find_field(md, lambda f: f.name in ['name', 'title']).name]
+        )
         vls = ['id'] + vls
         ctrs = md.objects.filter(id__in=fk_ids).values_list(*vls).distinct()
         for r in ctrs:
             td[ct_id, r[0]] = r[1:]
     for r in rs:
-        r[p:p + 2] = td.get((r[p], r[p + 1]), [None]*trans_size)
+        r[p:p + 2] = td.get((r[p], r[p + 1]), [None] * trans_size)
     if len(sd) > 1:
         rsd = {}
         nrs = []
@@ -321,8 +358,16 @@ class DateStat(object):
         return qset
 
     def stat(self, period=None, count_field='id', distinct=False, sort=None, only_first=False):
+        return self.group_by(period, measures=[Count(count_field, distinct=distinct)], sort=sort, only_first=only_first)
+        # qset = self.get_period_query_set(period).extra(select={'the_date': 'date(%s)' % self.time_field})
+        # res = count_by(qset, 'the_date', count_field=count_field, distinct=distinct, sort=sort)
+        # if only_first:
+        #     res = res[0] if len(res) > 0 else None
+        # return res
+
+    def group_by(self, period=None, group=[], measures=None, sort=None, only_first=False):
         qset = self.get_period_query_set(period).extra(select={'the_date': 'date(%s)' % self.time_field})
-        res = count_by(qset, 'the_date', count_field=count_field, distinct=distinct, sort=sort)
+        res = group_by(qset, ['the_date'] + group, measures=measures, sort=sort)
         if only_first:
             res = res[0] if len(res) > 0 else None
         return res
