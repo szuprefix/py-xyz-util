@@ -209,7 +209,7 @@ class ExcelDumpsMixin(object):
                       object_ids=list(qset.values_list("id", flat=True)),
                       accessors=self.get_xls_fields(),
                       headers=self.get_xls_headers())
-        from django_szuprefix.common.models import ExcelTask
+        from xyz_common.models import ExcelTask
         task = ExcelTask()
         task.content_object = self.master
         task.owner = self.master.user
