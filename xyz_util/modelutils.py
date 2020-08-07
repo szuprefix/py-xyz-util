@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-
+from django.apps.registry import apps
 __author__ = 'denishuang'
 
 from django.utils.encoding import force_text
@@ -358,7 +358,6 @@ class CharCorrelation(Expression):
 
 
 def get_relations(m1, m2):
-    from django.apps.registry import apps
     if isinstance(m1, (str, unicode)):
         m1 = apps.get_model(m1)
     if isinstance(m2, (str, unicode)):
