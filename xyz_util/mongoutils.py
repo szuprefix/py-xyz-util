@@ -14,10 +14,11 @@ DB = getattr(settings, 'MONGODB', DEFAULT_DB)
 
 class Store(object):
     name = 'test_mongo_store'
+    timeout = DB.get('TIMEOUT', 3000)
 
     def __init__(self):
         import pymongo
-        client = pymongo.MongoClient(DB['SERVER'])
+        client = pymongo.MongoClient(DB['SERVER'], serverSelectionTimeoutMS=self.timeout)
         self.db = getattr(client, DB.get('DB', DEFAULT_DB['DB']))
         self.collection = getattr(self.db, self.name)
 
