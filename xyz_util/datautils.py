@@ -235,6 +235,16 @@ def csv2list(csv, line_spliter="\n", field_spliter="\t"):
     return [l.split(field_spliter) for l in csv.split(line_spliter)]
 
 
+def csv2dictlist(csv, line_spliter="\n", field_spliter="\t"):
+    ls = csv.split(line_spliter)
+    fns = ls[0].split(field_spliter)
+    rs = []
+    for l in ls[1:]:
+        d = dict([(fns[i], a) for i, a in enumerate(l.split(field_spliter))])
+        rs.append(d)
+    return rs
+
+
 def exclude_dict_keys(d, *args):
     return dict([(k, v) for k, v in d.items() if k not in args])
 
@@ -335,7 +345,6 @@ def filter_emoji(desstr, restr=''):
     except re.error:
         co = re.compile('[\uD800-\uDBFF][\uDC00-\uDFFF]')
     return co.sub(restr, unicode(desstr))
-
 
 
 class Accessor(str):
