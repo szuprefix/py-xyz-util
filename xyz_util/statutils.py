@@ -378,7 +378,8 @@ def do_rest_stat_action(view, stats_action):
     pms = view.request.query_params
     ms = pms.getlist('measures', ['all'])
     from rest_framework.response import Response
-    return Response(stats_action(qset, ms, pms.get('period', '近7天')))
+    kwargs = dict(qset=qset, measures=ms, period = pms.get('period', '近7天'), time_field=pms.get('time_field'))
+    return Response(stats_action(**kwargs))
 
 
 def group_stat(data, fields, result, list_action=None):
