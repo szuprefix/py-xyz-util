@@ -473,6 +473,16 @@ def access(obj, path, quiet=True):
     return Accessor(path).resolve(obj, quiet=quiet)
 
 
+def import_function(s):
+    import importlib
+    ps = s.split(':')
+    try:
+        m = importlib.import_module(ps[0])
+        func = getattr(m, ps[1])
+        return func
+    except:
+        return s
+
 def list_dict(l):
     d = {}
     for k, v in l:

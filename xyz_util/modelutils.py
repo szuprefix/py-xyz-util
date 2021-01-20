@@ -386,6 +386,8 @@ def get_model_verbose_name_map():
         for mn, m in a.iteritems():
             mvn = m._meta.verbose_name
             r.setdefault(mvn, []).append(m)
+            avn = m._meta.app_config.verbose_name
+            r.setdefault('%s%s' % (avn, mvn), []).append(m)
     return r
 
 

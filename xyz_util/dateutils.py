@@ -11,6 +11,8 @@ def format_the_date(the_date=None):
         return date.today()
     if isinstance(the_date, (str, unicode)):
         return datetime.strptime(the_date[:10], "%Y-%m-%d").date()
+    if isinstance(the_date, datetime):
+        return the_date.date()
     return the_date
 
 
