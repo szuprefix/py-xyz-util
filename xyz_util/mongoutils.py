@@ -24,7 +24,10 @@ class Store(object):
 
     def random_get(self, *args, **kwargs):
         cursor = self.collection.find(*args, **kwargs)
-        p = random.randint(0,cursor.count())
+        count = cursor.count()
+        if count == 0:
+            return
+        p = random.randint(0, count-1)
         cursor.skip(p)
         r = cursor.next()
         cursor.close()
@@ -47,3 +50,6 @@ class Store(object):
 
     def count(self):
         return self.collection.count()
+
+    def count_by(self, field):
+        return self.collection.aggregate([{'$group':{'_id':'$%s'%field, 'count':{'$sum':1}}}])

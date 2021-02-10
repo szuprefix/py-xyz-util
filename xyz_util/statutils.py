@@ -374,7 +374,7 @@ class DateStat(object):
 
 
 def do_rest_stat_action(view, stats_action):
-    qset = using_stats_db(view.filter_queryset(view.get_queryset()))
+    qset = using_stats_db(view.filter_queryset(view.get_queryset())) if hasattr(view, 'get_queryset') else None
     pms = view.request.query_params
     ms = pms.getlist('measures', ['all'])
     from rest_framework.response import Response
