@@ -32,8 +32,8 @@ def write_dataframe_to_table(df, **kwargs):
     return df.to_sql(**kwargs)
 
 
-def smart_write_dataframe_to_table(df, **kwargs):
-    con = db_sqlalchemy_str(kwargs['con'])
+# def smart_write_dataframe_to_table(df, **kwargs):
+#     con = db_sqlalchemy_str(kwargs['con'])
 
 
 def split_dataframe_into_chunks(df, chunksize=10000):
