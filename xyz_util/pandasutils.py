@@ -10,7 +10,6 @@ from datetime import datetime
 from collections import OrderedDict
 import logging
 from django.db import transaction
-
 log = logging.getLogger("django")
 
 
@@ -19,12 +18,13 @@ def get_select_sql(sql):
     return ' ' in sql.lower() and sql or (u'select * from %s' % sql)
 
 
-def read_sql(table_name_or_sql, connection="default", coerce_float=True, just_sql=True):
+def read_sql(table_name_or_sql, connection="default", just_sql=True, **kwargs):
     sql = table_name_or_sql if just_sql else get_select_sql(table_name_or_sql)
     sql = sql.replace("%", "%%")
     con = connection if isinstance(connection, (str, unicode)) and '://' in connection else db_sqlalchemy_str(
         connection)
-    return pd.read_sql(sql, con, coerce_float=coerce_float)
+    from sqlalchemy import text
+    return pd.read_sql(text(sql), con, **kwargs)
 
 
 def write_dataframe_to_table(df, **kwargs):
