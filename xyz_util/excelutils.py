@@ -2,6 +2,8 @@
 # -*- coding:utf-8 -*-
 import re
 
+from six import text_type
+
 try:
     from StringIO import StringIO
 except:
@@ -292,7 +294,7 @@ class ColorExcelResponse(ExcelResponse):
             style = self.get_extra_style(self.rowx, colx, cell_style)
             self.sheet.write(self.rowx, colx, value, style=style)
             if self.auto_adjust_width:
-                width = len(unicode(value)) * 256
+                width = len(text_type(value)) * 256
                 if width > self.widths.get(colx, 0):
                     if width >= self.ROW_LIMIT:
                         width = self.ROW_LIMIT - 1
@@ -339,7 +341,7 @@ class ColorExcelResponse(ExcelResponse):
         return style
 
     def ensure_encoding(self, s):
-        if self.encoding != "utf8" and isinstance(s, unicode):
+        if self.encoding != "utf8" and isinstance(s, text_type):
             return s.decode("utf8").encode(self.encoding)
         return s
 

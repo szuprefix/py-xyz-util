@@ -3,8 +3,11 @@
 # Author:DenisHuang
 # Date:2013/11/7
 # Usage:
+from __future__ import unicode_literals, print_function
 from django.db import connections
 import logging
+
+from six import text_type
 
 log = logging.getLogger("django")
 
@@ -196,7 +199,7 @@ def create_table(conn, table, fields, schema=None, force_lower_name=False, prima
             "table": full_table_name,
             "definition": ", ".join(column_sqls)
         }
-        print sql
+        print(sql)
         result = schema_editor.execute(sql)
         if primary_key and ',' in primary_key:
             sql = schema_editor.sql_create_pk % {
@@ -228,7 +231,7 @@ def getDB(dbName='default'):
     return connections[dbName]
 
 def get_connection(conn='default'):
-    if isinstance(conn, (str, unicode)):
+    if isinstance(conn, text_type):
         return connections[conn]
     return conn
 

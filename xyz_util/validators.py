@@ -4,6 +4,8 @@ from django.core.validators import validate_email, validate_slug
 
 __author__ = 'denishuang'
 
+from six import text_type
+
 from . import datautils
 from django.core.validators import RegexValidator
 
@@ -13,7 +15,7 @@ RE_NOT_ALPHA = re.compile(r"[^0-9a-zA-Z]")
 RE_SPACE = re.compile(r"\s")
 
 def format_strip(v):
-    if isinstance(v, (str, unicode)):
+    if isinstance(v, text_type):
         return v.strip()
     return v
 
@@ -32,12 +34,12 @@ def format_not_require(v):
 
 
 def format_split_by_bracket(v):
-    return unicode(v).split("(")[0]
+    return text_type(v).split("(")[0]
 
 
 def format_banjiao(value):
-    if not isinstance(value, (str, unicode)):
-        value = unicode(value)
+    if not isinstance(value, text_type):
+        value = text_type(value)
     return datautils.strQ2B(value)
 
 
@@ -49,7 +51,7 @@ format_not_float = datautils.not_float
 
 def format_str_without_space(value):
     if value is not None:
-        return RE_SPACE.sub("", unicode(value))
+        return RE_SPACE.sub("", text_type(value))
 
 
 def format_alpha(value):

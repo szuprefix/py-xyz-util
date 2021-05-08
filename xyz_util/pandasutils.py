@@ -3,6 +3,8 @@
 from __future__ import unicode_literals, division
 import pandas as pd
 import numpy as np
+from six import text_type
+
 from .dbutils import db_sqlalchemy_str, get_table_fields, get_connection
 from pandas.io.sql import pandasSQL_builder
 import math
@@ -21,7 +23,7 @@ def get_select_sql(sql):
 def read_sql(table_name_or_sql, connection="default", just_sql=True, **kwargs):
     sql = table_name_or_sql if just_sql else get_select_sql(table_name_or_sql)
     sql = sql.replace("%", "%%")
-    con = connection if isinstance(connection, (str, unicode)) and '://' in connection else db_sqlalchemy_str(
+    con = connection if isinstance(connection, text_type) and '://' in connection else db_sqlalchemy_str(
         connection)
     from sqlalchemy import text
     return pd.read_sql(text(sql), con, **kwargs)
@@ -132,7 +134,7 @@ def dataframe_to_table(df, is_preview=False):
 
 
 def group_by(df, dimensions, measures=None, agg='count', interval=None):
-    if isinstance(dimensions, (str, unicode)):
+    if isinstance(dimensions, text_type):
         dimensions = dimensions.split(',')
     if interval:
         formats = {
@@ -197,7 +199,7 @@ def guess_dimensions(df, nunique_limit=1000, get_members=False):
             dimension_deny = c['type'] not in ['datetime',
                                                'date'] and rc >= nunique_limit and nunique > nunique_limit * 0.1
             if dimension_deny:
-                print c
+                print(c)
                 continue
             c['category'] = guess_dimension_category(cn)
             if get_members and c['type'] == 'string' and c['category'] not in ['date', 'datetime']:
@@ -364,7 +366,7 @@ class AutoGrowTable(object):
             insert_values=insert_values,
             update_values=update_values,
             vendor=self.connection.vendor)
-        print sql
+        print(sql)
         with self.connection.cursor() as cursor:
             dbutils.batch_execute(cursor, sql, self.gen_rows(df), chunk=chunk)
 

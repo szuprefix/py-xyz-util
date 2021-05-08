@@ -1,5 +1,5 @@
 # -*- coding:utf-8 -*-
-from __future__ import unicode_literals
+from __future__ import unicode_literals, print_function
 from collections import OrderedDict
 
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -13,6 +13,9 @@ from django.forms.fields import TypedMultipleChoiceField
 from django.forms.widgets import CheckboxSelectMultiple
 from django.db.models import Count, Model, DateTimeField, Expression, IntegerField, QuerySet, ForeignKey, ManyToManyField
 import json, re
+
+from six import text_type
+
 from .datautils import JSONEncoder, auto_code
 from . import formutils
 
@@ -43,7 +46,7 @@ class CommaSeparatedIntegerField(djfields.CommaSeparatedIntegerField):
 class MutipleGetFieldDisplayModelMixin:
     def _get_FIELD_display(self, field):
         value = getattr(self, field.attname)
-        print value, type(value)
+        print(value, type(value))
         if value:
             d = dict(field.flatchoices)
             return ",".join([force_text(d.get(v, v), strings_only=True) for v in value.split(",")])
@@ -60,7 +63,7 @@ class CompositeChoicesField(djfields.CharField):
     def to_python(self, value):
         if not value:
             return {}
-        elif isinstance(value, (str, unicode)):
+        elif isinstance(value, text_type):
             return json.loads(value)
         elif isinstance(value, (dict)):
             return value
@@ -91,7 +94,7 @@ class JSONField(djfields.Field):
     def get_prep_value(self, value):
         return json.dumps(value, indent=2, cls=JSONEncoder)
 
-    def from_db_value(self, value, expression, connection, context):
+    def from_db_value(self, value, expression, connection, context=None):
         if value is None:
             return None
         return json.loads(value)
@@ -235,7 +238,7 @@ def get_related_field(obj, field_name):
 
 def get_related_field_verbose_name(obj, field_name, start_position=0):
     r = get_related_fields(obj, field_name, start_position=start_position)
-    return "".join([unicode(getattr(a, 'verbose_name', None) or a['content_type']) for a in r[start_position:]])
+    return "".join([text_type(getattr(a, 'verbose_name', None) or a['content_type']) for a in r[start_position:]])
 
 
 def get_object_accessor_value(record, accessor):
@@ -253,9 +256,9 @@ def get_object_accessor_value(record, accessor):
     from django_tables2.utils import A
     v = A(remainder).resolve(penultimate, quiet=True)
     if isinstance(v, Model):
-        return unicode(v)
+        return text_type(v)
     elif hasattr(v, 'update_or_create'):  # a Model Manager ?
-        return ";".join([unicode(o) for o in v.all()])
+        return ";".join([text_type(o) for o in v.all()])
     return v
 
 
@@ -358,9 +361,9 @@ class CharCorrelation(Expression):
 
 
 def get_relations(m1, m2):
-    if isinstance(m1, (str, unicode)):
+    if isinstance(m1, text_type):
         m1 = apps.get_model(m1)
-    if isinstance(m2, (str, unicode)):
+    if isinstance(m2, text_type):
         m2 = apps.get_model(m2)
     return [f for f in m1._meta.get_fields() if f.is_relation and f.related_model == m2]
 
@@ -392,7 +395,7 @@ def get_model_verbose_name_map():
 
 
 def get_model_field_verbose_name_map(m):
-    if isinstance(m, (str, unicode)):
+    if isinstance(m, text_type):
         m = apps.get_model(m)
     r = {}
     for f in m._meta.get_fields():

@@ -5,7 +5,7 @@ import sys
 
 setup(
     name="xyz-util",
-    version="0.0.13",
+    version="0.1.0",
     author="szuprefix",
     author_email="szuprefix@126.com",
     description="common utils",
@@ -15,7 +15,8 @@ setup(
     packages=find_packages(exclude=['tests.*', 'tests', 'testproject', 'example.*', 'example']),
     include_package_data=True,
     install_requires=[
-        'django>=1.11.2'
+        'django>=1.11.2',
+        'python-dateutil'
     ],
     classifiers=[
         "Environment :: Web Environment",
@@ -28,5 +29,6 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 2",
         "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3",
     ],
 )

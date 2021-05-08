@@ -4,6 +4,8 @@ from collections import OrderedDict
 
 from django.db.models import Count
 from django.conf import settings
+from six import text_type
+
 from . import modelutils, datautils, dateutils
 
 __author__ = 'denishuang'
@@ -154,7 +156,7 @@ class StatObject(object):
 
     def _get_choice(self, choices, value):
         for k, t in choices:
-            if unicode(k) == value or t == value:
+            if text_type(k) == value or t == value:
                 return k
         return value
 
@@ -190,7 +192,7 @@ class TimeStat(object):
 
     def get_step(self, beginTime, endTime):
         dt = endTime - beginTime
-        print dt.seconds, dt.days
+        print(dt.seconds, dt.days)
 
         if dt.days > 7:
             return 3600 * 24
@@ -206,7 +208,7 @@ class TimeStat(object):
         tfn = "time"
         beginTime, endTime = dateutils.get_period_by_name(dateRange)
         step = self.get_step(beginTime, endTime)
-        print beginTime, endTime, step
+        print(beginTime, endTime, step)
         fn = self.timeField
         qset = self.query_set.filter(**{"%s__gte" % fn: beginTime, "%s__lt" % fn: endTime})
         time_field = {tfn: "floor(unix_timestamp(%s)/%d)*%d" % (fn, step, step)}
@@ -220,7 +222,7 @@ class TimeStat(object):
 
 
 def group_by(qset, group, measures=None, sort=None, group_map=None):
-    if isinstance(group, (str, unicode)):
+    if isinstance(group, text_type):
         group = [g.strip() for g in group.split(',') if g.strip()]
     if not measures:
         measures = [Count('id')]
@@ -243,7 +245,7 @@ def group_by(qset, group, measures=None, sort=None, group_map=None):
 
 def count_by(qset, group, count_field='id', distinct=False, sort=None, group_map=None):
     return group_by(qset, group, measures=[Count(count_field, distinct=distinct)], sort=sort, group_map=group_map)
-    # if isinstance(group, (str, unicode)):
+    # if isinstance(group, text_type):
     #     group = group.split(',')
     # qset = qset.values(*group).order_by(*group)
     # dl = qset.annotate(c=Count(count_field, distinct=distinct))
@@ -287,7 +289,7 @@ def count_with_generic_relation(qset, group, count_field='id', trans_map={}):
 def group_by_with_generic_relation(qset, group, measures=[], trans_map={}):
     from django.contrib.contenttypes.fields import GenericForeignKey
     from django.contrib.contenttypes.models import ContentType
-    if isinstance(group, (str, unicode)):
+    if isinstance(group, text_type):
         group = group.split(',')
     trans_size = trans_map and len(trans_map.values()[0]) or 1
     gs = []

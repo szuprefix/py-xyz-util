@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
-
+from __future__ import unicode_literals
 from .datautils import JSONEncoder
-
+from six import text_type
 __author__ = 'Administrator'
 
 import json
@@ -47,13 +47,13 @@ class JsonEditTextarea(widgets.Textarea):
             value = ""
         if isinstance(value, BrokenData):
             value = value.value
-        elif isinstance(value, (str, unicode)):
+        elif isinstance(value, text_type):
             return value
         else:
             value = json.dumps(value, indent=2, cls=JSONEncoder)
         return value
 
-    def render(self, name, value, attrs=None):
+    def render(self, name, value, attrs=None, renderer=None):
         value = self.format_value(value)
         return super(JsonEditTextarea, self).render(name, value, attrs)
 
@@ -101,7 +101,7 @@ class WordSetTextarea(widgets.Textarea):
     def value_from_datadict(self, data, files, name):
         val = super(WordSetTextarea, self).value_from_datadict(data, files, name)
         import re
-        r = re.compile(ur"[\s,;，；]+")
+        r = re.compile(r"[\s,;，；]+")
         return r.split(val)
 
 

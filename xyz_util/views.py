@@ -6,6 +6,7 @@ from django.db.models import Q
 from django.forms import model_to_dict
 from django.http import JsonResponse, HttpResponse
 from django.views.generic import View
+from six import text_type
 
 from . import modelutils, formutils, dateutils, datautils
 
@@ -168,7 +169,7 @@ class SearchFormMixin(object):
                 choices = getattr(self, func_name)()
             else:
                 choices = modelutils.get_related_field(self.model, f).choices
-            d[f] = [(unicode(a), unicode(b)) for a, b in choices]
+            d[f] = [(text_type(a), text_type(b)) for a, b in choices]
         return d
 
     def get_verbose_names(self):

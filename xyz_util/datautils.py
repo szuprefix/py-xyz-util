@@ -2,7 +2,7 @@
 from __future__ import unicode_literals
 import re
 from decimal import Decimal
-
+from six import text_type
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db.models.fields.files import FieldFile
 from datetime import date, datetime
@@ -142,7 +142,7 @@ def count_group_by(data, groups):
 
     >>> cr = count_group_by(dl,["f1","f2","f3"])
     >>> for k in sorted(cr.keys()):
-    ...     print "\t"*len(k),k[-1], cr[k]
+    ...     print("\t"*len(k),k[-1], cr[k])
     ...
     """
     res = {}
@@ -227,7 +227,7 @@ def strB2Q(ustring):
 def list2csv(data, line_spliter="\n", field_spliter="\t"):
     s = []
     for line in data:
-        s.append(field_spliter.join([unicode(v) for v in line]))
+        s.append(field_spliter.join([text_type(v) for v in line]))
     return line_spliter.join(s)
 
 
@@ -344,7 +344,7 @@ def filter_emoji(desstr, restr=''):
         co = re.compile('[\U00010000-\U0010ffff]')
     except re.error:
         co = re.compile('[\uD800-\uDBFF][\uDC00-\uDFFF]')
-    return co.sub(restr, unicode(desstr))
+    return co.sub(restr, text_type(desstr))
 
 
 class Accessor(str):
