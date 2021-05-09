@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 import re
 
-from six import text_type
+from six import text_type, string_types
 
 try:
     from StringIO import StringIO
@@ -341,7 +341,7 @@ class ColorExcelResponse(ExcelResponse):
         return style
 
     def ensure_encoding(self, s):
-        if self.encoding != "utf8" and isinstance(s, text_type):
+        if self.encoding != "utf8" and isinstance(s, string_types):
             return s.decode("utf8").encode(self.encoding)
         return s
 

@@ -2,14 +2,14 @@
 import calendar
 from datetime import date, datetime, timedelta
 from dateutil.relativedelta import relativedelta
-from six import text_type
+from six import string_types
 __author__ = 'denishuang'
 
 
 def format_the_date(the_date=None):
     if not the_date:
         return date.today()
-    if isinstance(the_date, text_type):
+    if isinstance(the_date, string_types):
         return datetime.strptime(the_date[:10], "%Y-%m-%d").date()
     if isinstance(the_date, datetime):
         return the_date.date()
@@ -75,10 +75,10 @@ def get_current_month(the_date=None):
 
 
 def weeks_between(d1, d2):
-    if isinstance(d1, text_type):
+    if isinstance(d1, string_types):
         d = d1.split('-')
         d1 = datetime(int(d[0]), int(d[1]), int(d[2]))
-    if isinstance(d2, text_type):
+    if isinstance(d2, string_types):
         d = d2.split('-')
         d2 = datetime(int(d[0]), int(d[1]), int(d[2]))
     return abs(d2.isocalendar()[1] - d1.isocalendar()[1])
@@ -96,7 +96,7 @@ def get_pre_month(d=None):
     import calendar
     if d is None:
         d = datetime.now()
-    if isinstance(d, text_type):
+    if isinstance(d, string_types):
         d = datetime(int(d.split('-')[0]), int(d.split('-')[1]), 1)
     this_month_days = calendar.monthrange(d.year, d.month)[1]
     the_day_of_pre_month = d - timedelta(days=this_month_days)

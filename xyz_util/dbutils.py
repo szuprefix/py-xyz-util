@@ -7,7 +7,7 @@ from __future__ import unicode_literals, print_function
 from django.db import connections
 import logging
 
-from six import text_type
+from six import string_types
 
 log = logging.getLogger("django")
 
@@ -231,7 +231,7 @@ def getDB(dbName='default'):
     return connections[dbName]
 
 def get_connection(conn='default'):
-    if isinstance(conn, text_type):
+    if isinstance(conn, string_types):
         return connections[conn]
     return conn
 

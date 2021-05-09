@@ -14,7 +14,7 @@ from django.forms.widgets import CheckboxSelectMultiple
 from django.db.models import Count, Model, DateTimeField, Expression, IntegerField, QuerySet, ForeignKey, ManyToManyField
 import json, re
 
-from six import text_type
+from six import text_type, string_types
 
 from .datautils import JSONEncoder, auto_code
 from . import formutils
@@ -63,7 +63,7 @@ class CompositeChoicesField(djfields.CharField):
     def to_python(self, value):
         if not value:
             return {}
-        elif isinstance(value, text_type):
+        elif isinstance(value, string_types):
             return json.loads(value)
         elif isinstance(value, (dict)):
             return value
@@ -162,7 +162,7 @@ def group_by(qset, group):
 
 
 def multi_group_by(qset, group):
-    if isinstance(group, basestring):
+    if isinstance(group, string_types):
         group = group.split(",")
     return list(qset.order_by(*group).values(*group).annotate(C=Count("id")))
 
@@ -361,9 +361,9 @@ class CharCorrelation(Expression):
 
 
 def get_relations(m1, m2):
-    if isinstance(m1, text_type):
+    if isinstance(m1, string_types):
         m1 = apps.get_model(m1)
-    if isinstance(m2, text_type):
+    if isinstance(m2, string_types):
         m2 = apps.get_model(m2)
     return [f for f in m1._meta.get_fields() if f.is_relation and f.related_model == m2]
 
@@ -395,7 +395,7 @@ def get_model_verbose_name_map():
 
 
 def get_model_field_verbose_name_map(m):
-    if isinstance(m, text_type):
+    if isinstance(m, string_types):
         m = apps.get_model(m)
     r = {}
     for f in m._meta.get_fields():

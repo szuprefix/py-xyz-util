@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 from __future__ import unicode_literals
 from .datautils import JSONEncoder
-from six import text_type
+from six import string_types
 __author__ = 'Administrator'
 
 import json
@@ -47,7 +47,7 @@ class JsonEditTextarea(widgets.Textarea):
             value = ""
         if isinstance(value, BrokenData):
             value = value.value
-        elif isinstance(value, text_type):
+        elif isinstance(value, string_types):
             return value
         else:
             value = json.dumps(value, indent=2, cls=JSONEncoder)

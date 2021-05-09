@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 from django.db.models import Count
 from django.conf import settings
-from six import text_type
+from six import text_type,string_types
 
 from . import modelutils, datautils, dateutils
 
@@ -222,7 +222,7 @@ class TimeStat(object):
 
 
 def group_by(qset, group, measures=None, sort=None, group_map=None):
-    if isinstance(group, text_type):
+    if isinstance(group, string_types):
         group = [g.strip() for g in group.split(',') if g.strip()]
     if not measures:
         measures = [Count('id')]
@@ -245,7 +245,7 @@ def group_by(qset, group, measures=None, sort=None, group_map=None):
 
 def count_by(qset, group, count_field='id', distinct=False, sort=None, group_map=None):
     return group_by(qset, group, measures=[Count(count_field, distinct=distinct)], sort=sort, group_map=group_map)
-    # if isinstance(group, text_type):
+    # if isinstance(group, string_types):
     #     group = group.split(',')
     # qset = qset.values(*group).order_by(*group)
     # dl = qset.annotate(c=Count(count_field, distinct=distinct))
@@ -289,7 +289,7 @@ def count_with_generic_relation(qset, group, count_field='id', trans_map={}):
 def group_by_with_generic_relation(qset, group, measures=[], trans_map={}):
     from django.contrib.contenttypes.fields import GenericForeignKey
     from django.contrib.contenttypes.models import ContentType
-    if isinstance(group, text_type):
+    if isinstance(group, string_types):
         group = group.split(',')
     trans_size = trans_map and len(trans_map.values()[0]) or 1
     gs = []
