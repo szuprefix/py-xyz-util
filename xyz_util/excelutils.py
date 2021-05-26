@@ -16,6 +16,12 @@ log = logging.getLogger("django")
 import xlrd, xlwt
 from excel_response import ExcelResponse
 
+def coordinate_range_to_tuple(s):
+    from  openpyxl.utils import coordinate_to_tuple
+    ps = s.split(':')
+    p0=coordinate_to_tuple(ps[0])
+    p1=coordinate_to_tuple(ps[1])
+    return (p0[0]-1, p1[0], p0[1]-1, p1[1])
 
 def get_grid_dict(excel_file, sheet_name):
     """
@@ -40,6 +46,33 @@ def get_grid_dict(excel_file, sheet_name):
                 point_dict[(i, j)] = value
     return point_dict
 
+
+def get_grid_dict_xlsx(excel_file, sheet_name=None):
+    """
+    把excel数据转成字典，以x,y坐标为key, 单元格值为value, 合并单元格的值会填充到每个子单元格
+    """
+    import openpyxl
+    wb = openpyxl.load_workbook(excel_file)
+    point_dict = {}
+    ws = wb.get_sheet_by_name(sheet_name) if sheet_name else wb.active
+    rs = ws.rows
+    for i in range(ws.max_row):
+        row = rs.next()
+        for j in range(ws.max_column):
+            v = row[j].value
+            if v!= "" and v is not None:
+                point_dict[(i, j)] = v
+    for mcr in ws.merged_cell_ranges:
+        item = coordinate_range_to_tuple(mcr)
+        baser = item[0]
+        basec = item[2]
+        value = point_dict.get((baser, basec))
+        if value is None:
+            continue
+        for i in range(item[0], item[1]):
+            for j in range(item[2], item[3]):
+                point_dict[(i, j)] = value
+    return point_dict
 
 def filter_sheets_by_name(excel_file, re_sheet_name):
     """

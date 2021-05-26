@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
 from collections import OrderedDict
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from django.db.models import Q
 from django.forms import model_to_dict
 from django.http import JsonResponse, HttpResponse

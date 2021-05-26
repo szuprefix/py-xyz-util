@@ -234,7 +234,7 @@ class AutoGrowTable(object):
     def detect_fields(self):
         try:
             self.fields = [f.lower() for f in get_table_fields(self.connection, self.table_name, self.schema)]
-        except Exception, e:
+        except Exception as e:
             err_str = str(e)
             if "does not exist" in err_str:
                 return
@@ -334,7 +334,7 @@ class AutoGrowTable(object):
                     if self.update_timestamp_field:
                         d[self.update_timestamp_field] = now
                     self.table.insert(d).execute()
-            except Exception, e:
+            except Exception as e:
                 errors.append(([d[k.lower()] for k in pks], str(e)))
         if errors:
             log.error("pandas.AutoGrowTable %s.%s insert_or_update got %d errors: %s", self.connection.alias,

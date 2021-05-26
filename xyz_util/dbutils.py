@@ -169,7 +169,7 @@ def create_table(conn, table, fields, schema=None, force_lower_name=False, prima
     try:
         old_fields = get_table_fields(conn, table, schema=schema)
         return  # table exists, do nothing
-    except Exception, e:
+    except Exception as e:
         log.warning("dbutils.create_table exception: %s", e)  # table not exists, continue
 
     class NoneMeta(object):

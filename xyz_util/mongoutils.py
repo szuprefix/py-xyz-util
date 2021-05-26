@@ -16,11 +16,11 @@ class Store(object):
     name = 'test_mongo_store'
     timeout = DB.get('TIMEOUT', 3000)
 
-    def __init__(self, server=None, db=None):
+    def __init__(self, server=None, db=None, name=None):
         import pymongo
         client = pymongo.MongoClient(server or DB['SERVER'], serverSelectionTimeoutMS=self.timeout)
         self.db = getattr(client, db or DB.get('DB', DEFAULT_DB['DB']))
-        self.collection = getattr(self.db, self.name)
+        self.collection = getattr(self.db, name or self.name)
 
     def random_get(self, *args, **kwargs):
         cursor = self.collection.find(*args, **kwargs)
