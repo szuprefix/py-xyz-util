@@ -137,7 +137,7 @@ class BaseField(object):
         for f in self.get_validators():
             try:
                 f(value)
-            except Exception, e:
+            except Exception as e:
                 errors.append(e.message)
         return errors
 

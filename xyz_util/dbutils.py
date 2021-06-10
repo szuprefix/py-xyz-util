@@ -11,10 +11,12 @@ from six import string_types
 
 log = logging.getLogger("django")
 
-db = connections['default']
-cursor = db.cursor()
-cursor._defer_warnings = True
-
+try:
+    db = connections['default']
+    cursor = db.cursor()
+    cursor._defer_warnings = True
+except:
+    pass
 
 def get_table_fields(conn, table_name, schema=None):
     return get_table_schema(conn, table_name, schema=schema)['fields']

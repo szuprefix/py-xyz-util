@@ -138,7 +138,7 @@ class BaseImporter(object):
                     cu += 1
                     ir.append("更新成功;")
 
-            except Exception, e:
+            except Exception as e:
                 log.error("%s run error:%s; data:%s", self, e, d)
                 ce += 1
                 ir.append("程序异常;")

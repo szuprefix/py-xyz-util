@@ -12,5 +12,8 @@ def read_table(f):
         pdf = pdfplumber.open(f)
     ds = []
     for page in pdf.pages:
-        ds.extend(page.extract_table())
+        try:
+            ds.extend(page.extract_table())
+        except:
+            pass
     return ds
