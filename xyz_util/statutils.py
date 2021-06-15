@@ -359,16 +359,19 @@ class DateStat(object):
             qset = self.query_set.filter(**pms)
         return qset
 
-    def stat(self, period=None, count_field='id', distinct=False, sort=None, only_first=False):
-        return self.group_by(period, measures=[Count(count_field, distinct=distinct)], sort=sort, only_first=only_first)
+    def stat(self, period=None, count_field='id', distinct=False, **kwargs):
+        return self.group_by(period, measures=[Count(count_field, distinct=distinct)], **kwargs)
         # qset = self.get_period_query_set(period).extra(select={'the_date': 'date(%s)' % self.time_field})
         # res = count_by(qset, 'the_date', count_field=count_field, distinct=distinct, sort=sort)
         # if only_first:
         #     res = res[0] if len(res) > 0 else None
         # return res
 
-    def group_by(self, period=None, group=[], measures=None, sort=None, only_first=False):
-        qset = self.get_period_query_set(period).extra(select={'the_date': 'date(%s)' % self.time_field})
+    def group_by(self, period=None, group=[], measures=None, sort=None, only_first=False, filter=None):
+        qset = self.get_period_query_set(period)
+        if filter:
+            qset=qset.filter(**filter)
+        qset = qset.extra(select={'the_date': 'date(%s)' % self.time_field})
         res = group_by(qset, ['the_date'] + group, measures=measures, sort=sort)
         if only_first:
             res = res[0] if len(res) > 0 else None

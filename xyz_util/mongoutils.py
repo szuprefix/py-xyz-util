@@ -39,8 +39,8 @@ class Store(object):
     def upsert(self, cond, value):
         self.collection.update(cond, {'$set': value}, upsert=True)
 
-    def update(self, cond, value):
-        self.collection.update(cond, {'$set': value})
+    def update(self, cond, value, **kwargs):
+        self.collection.update(cond, {'$set': value}, **kwargs)
 
     def inc(self, cond, value):
         self.collection.update(cond, {'$inc': value}, upsert=True)
