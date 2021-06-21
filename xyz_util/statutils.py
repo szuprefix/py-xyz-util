@@ -235,7 +235,7 @@ def group_by(qset, group, measures=None, sort=None, group_map=None):
     dl = qset.annotate(**mm)
     if sort is not None:
         dl = dl.order_by("%sf0" % sort)
-    fs = group + mm.keys()
+    fs = group + list(mm.keys())
     rs = [[d[f] for f in fs] for d in dl]
     if group_map:
         for d in rs:
