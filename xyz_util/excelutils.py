@@ -16,12 +16,14 @@ log = logging.getLogger("django")
 import xlrd, xlwt
 from excel_response import ExcelResponse
 
+
 def coordinate_range_to_tuple(s):
-    from  openpyxl.utils import coordinate_to_tuple
+    from openpyxl.utils import coordinate_to_tuple
     ps = s.split(':')
-    p0=coordinate_to_tuple(ps[0])
-    p1=coordinate_to_tuple(ps[1])
-    return (p0[0]-1, p1[0], p0[1]-1, p1[1])
+    p0 = coordinate_to_tuple(ps[0])
+    p1 = coordinate_to_tuple(ps[1])
+    return (p0[0] - 1, p1[0], p0[1] - 1, p1[1])
+
 
 def get_grid_dict(excel_file, sheet_name):
     """
@@ -60,7 +62,7 @@ def get_grid_dict_xlsx(excel_file, sheet_name=None):
         row = rs.next()
         for j in range(ws.max_column):
             v = row[j].value
-            if v!= "" and v is not None:
+            if v != "" and v is not None:
                 point_dict[(i, j)] = v
     for mcr in ws.merged_cell_ranges:
         item = coordinate_range_to_tuple(mcr)
@@ -73,6 +75,7 @@ def get_grid_dict_xlsx(excel_file, sheet_name=None):
             for j in range(item[2], item[3]):
                 point_dict[(i, j)] = value
     return point_dict
+
 
 def filter_sheets_by_name(excel_file, re_sheet_name):
     """
@@ -145,7 +148,7 @@ def pandas_read(excel, trim_null_rate=0.5):
     return {'sheets': rs}
 
 
-def excel2json(excel, row_top=0, field_names_template=[], min_fields_count=1, col_name_formater=lambda c: c):
+def excel2json(excel, row_top=0, field_names_template=[], min_fields_count=1, col_name_formater=lambda c: text_type(c)):
     """
     把excel数据转成json字典，本函数在实现非固定字段导入时很有用。
     比如excel：
@@ -176,7 +179,13 @@ def excel2json(excel, row_top=0, field_names_template=[], min_fields_count=1, co
     elif hasattr(excel, "read"):
         workbook = xlrd.open_workbook(file_contents=excel.read())
     res = []
-    ftc = len(field_names_template)
+    if isinstance(field_names_template, string_types):
+        field_names_template = field_names_template.split(',')
+
+    # ftc = len(field_names_template)
+    def count_target_column(col):
+        return sum([(1 if fn in col else 0) for fn in field_names_template])
+
     for sheet in workbook.sheets():
         nrows = sheet.nrows
         if nrows <= 0:
@@ -187,7 +196,7 @@ def excel2json(excel, row_top=0, field_names_template=[], min_fields_count=1, co
             max_fields_count = 0
             for i in range(min(nrows, 10)):
                 line = sheet.row_values(i)
-                count = len([col for col in line if col_name_formater(col) in field_names_template])
+                count = len([col for col in line if count_target_column(col_name_formater(col))])
                 if count > max_fields_count:
                     max_fields_count = count
                     row_top = i
@@ -202,6 +211,42 @@ def excel2json(excel, row_top=0, field_names_template=[], min_fields_count=1, co
             if vc >= min_fields_count:
                 res.append(obj)
     return res
+
+
+class TableReader(object):
+
+    def __init__(self, field_words=[]):
+        self.fields = [
+            (a, [f.strip() for f in b.split(',') if f.strip()])
+            for a, b in field_words
+        ]
+
+    def recognize(self, ts):
+        d = {}
+        for fn, ws in self.fields:
+            rs = []
+            for i, t in enumerate(ts):
+                c = 0
+                for w in ws:
+                    if w in t:
+                        c += 1
+                rs.append((c, i))
+            rs.sort()
+            d[fn] = ts[rs[-1][1]]
+        return d
+
+    def transform(self, ds):
+        fm = self.recognize(ds[0].keys())
+        rs = []
+        for d in ds:
+            nd = [(k, d.get(v, None)) for k, v in fm.items()]
+            rs.append(nd)
+        return rs
+
+    def read(self, excel_file):
+        fts = reduce(lambda a, b: a + b, map(lambda a: a[1], self.fields), [])
+        ds = excel2json(excel_file, field_names_template=fts)
+        return self.transform(ds)
 
 
 class ExcelDumpsMixin(object):

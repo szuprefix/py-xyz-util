@@ -281,10 +281,9 @@ def cn2digits(uchars_cn):
 
 def auto_code(n):
     from unidecode import unidecode
-    import re
     replace_chars = lambda s: re.sub(r"""[\(\["'\]\)]""", ' ', s)
-    add_space = lambda s: re.sub(r"([\s\w])([^\s\w])", r"\1 \2", s)
-    return "".join([a[0] for a in unidecode(add_space(replace_chars(n))).split(" ") if a]).upper()
+    aset = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    return ''.join([a if a in aset else unidecode(a)[0] for a in replace_chars(n) if a.strip()])
 
 
 def try_numeric_dict(d):
