@@ -87,6 +87,6 @@ def form2dict(form):
     d = OrderedDict([(f.name, boundField2json(f)) for f in form])
     if isinstance(form, ModelForm):
         fd = form._meta.model._meta
-        for n, f in d.iteritems():
+        for n, f in d.items():
             f['dbtype'] = fd.get_field(n).__class__.__name__
     return d

@@ -238,7 +238,7 @@ def get_connection(conn='default'):
     return conn
 
 def getDBOptionals():
-    return [(k, v["HOST"]) for k, v in connections.databases.iteritems()]
+    return [(k, v["HOST"]) for k, v in connections.databases.items()]
 
 
 def django_db_setting_2_sqlalchemy(sd):
@@ -313,12 +313,12 @@ def transfer_table(db_src, db_dist, sql_select, table_name, chunk=1000, insert_t
 def gen_batch_insert_sql(table_name, fields, primary_keys, insert_type='replace', insert_values={}, update_values={},
                          vendor='mysql'):
     insert_fields = [f for f in fields if insert_values.get(f, f) is not None]
-    for k, v in insert_values.iteritems():
+    for k, v in insert_values.items():
         if k not in insert_fields:
             insert_fields.append(k)
 
     update_fields = [f for f in fields if update_values.get(f, f) is not None]
-    for k, v in update_values.iteritems():
+    for k, v in update_values.items():
         if k not in update_fields:
             update_fields.append(k)
 

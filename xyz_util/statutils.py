@@ -315,7 +315,7 @@ def group_by_with_generic_relation(qset, group, measures=[], trans_map={}):
     for ct, fk in ss:
         sd.setdefault(ct, []).append(fk)
     td = {}
-    for ct_id, fk_ids in sd.iteritems():
+    for ct_id, fk_ids in sd.items():
         if ct_id is None:
             continue
         ct = ContentType.objects.get(id=ct_id)

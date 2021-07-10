@@ -10,7 +10,7 @@ from django.forms import widgets
 
 class CompositeChoicesWidget(widgets.MultiWidget):
     def __init__(self, attrs=None, choice_set={}, format_str=None):
-        self.keynames = [name for name, choices in choice_set.iteritems()]
+        self.keynames = [name for name, choices in choice_set.items()]
         _widgets = [widgets.Select(attrs=attrs, choices=choice_set[name]) for name in self.keynames]
         self.format_str = format_str or "".join(["%s:%%(%s)s" % (name, name) for name in self.keynames])
         super(CompositeChoicesWidget, self).__init__(_widgets, attrs)

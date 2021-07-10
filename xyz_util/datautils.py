@@ -173,7 +173,7 @@ def str2dict(s, line_spliter='\n', key_spliter=':'):
 
 
 def dict2str(d, line_spliter='\n', key_spliter=':'):
-    return line_spliter.join(["%s%s%s" % (k, key_spliter, v) for k, v in d.iteritems()])
+    return line_spliter.join(["%s%s%s" % (k, key_spliter, v) for k, v in d.items()])
 
 
 def not_float(d):
@@ -280,10 +280,10 @@ def cn2digits(uchars_cn):
 
 
 def auto_code(n):
-    from unidecode import unidecode
+    from xpinyin import Pinyin
+    p = Pinyin()
     replace_chars = lambda s: re.sub(r"""[\(\["'\]\)]""", ' ', s)
-    aset = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
-    return ''.join([a if a in aset else unidecode(a)[0] for a in replace_chars(n) if a.strip()])
+    return replace_chars(p.get_initials(n, ''))
 
 
 def try_numeric_dict(d):

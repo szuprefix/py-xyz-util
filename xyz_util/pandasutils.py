@@ -54,7 +54,7 @@ def dtype(dt):
 
 def get_db_schema_fields(df):
     fields = OrderedDict()
-    for c, dt in df.dtypes.iteritems():
+    for c, dt in df.dtypes.items():
         t = dtype(str(dt))
         ps = dict(null=True)
         if t == 'int':
@@ -82,14 +82,14 @@ def ftype(ft):
 
 
 def format_timestamp(df):
-    for c, dt in df.dtypes.iteritems():
+    for c, dt in df.dtypes.items():
         if str(dt).startswith("datetime"):
             df[c] = df[c].apply(lambda x: x.isoformat())
     return df
 
 
 def tz_convert(df):
-    for c, dt in df.dtypes.iteritems():
+    for c, dt in df.dtypes.items():
         sdt = str(dt)
         if sdt.startswith("datetime") and 'UTC' in sdt:
             df[c] = df[c].dt.tz_convert('Asia/Shanghai').dt.tz_localize(None)
@@ -126,7 +126,10 @@ def dataframe_to_table(df, is_preview=False):
         data = df[:10].merge(df[-10:], how='outer')
     else:
         data = df
-    from pandas.io.json.table_schema import build_table_schema
+    try:
+        from pandas.io.json.table_schema import build_table_schema
+    except Exception:
+        from pandas.io.json._table_schema import build_table_schema
     schema = build_table_schema(df, index=False)
     data = tz_convert(data)
     data = [clear_dict_nan_value(d) for d in data.to_dict("records")]
@@ -162,7 +165,7 @@ def guess_dimension_category(n):
         "日期": "date",
         "时间": "datetime"
     }
-    for k, v in d.iteritems():
+    for k, v in d.items():
         if n.endswith(k):
             return v
 
@@ -171,7 +174,7 @@ def guess_measure_category(n):
     d = {
         "金额": "currency"
     }
-    for k, v in d.iteritems():
+    for k, v in d.items():
         if n.endswith(k):
             return v
 
@@ -245,8 +248,8 @@ class AutoGrowTable(object):
 
     def create_table(self, df):
         exists = self.pd_sql.has_table(self.table_name)
-        dtypes = dict([(c, dtype(str(dt))) for c, dt in df.dtypes.iteritems()])
-        new_fields = ["%s %s" % (f, ftype(dt)) for f, dt in dtypes.iteritems() if f.lower() not in self.fields]
+        dtypes = dict([(c, dtype(str(dt))) for c, dt in df.dtypes.items()])
+        new_fields = ["%s %s" % (f, ftype(dt)) for f, dt in dtypes.items() if f.lower() not in self.fields]
         if self.update_timestamp_field and self.update_timestamp_field not in self.fields:
             new_fields.append("%s timestamp default CURRENT_TIMESTAMP" % self.update_timestamp_field)
         if self.insert_timestamp_field and self.insert_timestamp_field not in self.fields:

@@ -385,8 +385,8 @@ def get_field_verbose_name(f):
 
 def get_model_verbose_name_map():
     r = {}
-    for an, a in apps.all_models.iteritems():
-        for mn, m in a.iteritems():
+    for an, a in apps.all_models.items():
+        for mn, m in a.items():
             mvn = m._meta.verbose_name
             r.setdefault(mvn, []).append(m)
             avn = m._meta.app_config.verbose_name
