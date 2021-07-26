@@ -18,148 +18,148 @@ def using_stats_db(qset):
         qset = qset.using(DB_FOR_STATS)
     return qset
 
-
-class Measure(object):
-    # Tracks each time a Field instance is created. Used to retain order.
-    creation_counter = 0
-
-    def __init__(self, verbose_name, cond={}, exclude=False, agg=Count("id"), default=0):
-        self.verbose_name = verbose_name
-        self.cond = cond
-        self.exclude = exclude
-        self.agg = agg
-        self.default = default
-        # Increase the creation counter, and save our local copy.
-        self.creation_counter = Measure.creation_counter
-        Measure.creation_counter += 1
-
-
-class Parameter(object):
-    def __init__(self, name):
-        self.name = name
-
-
-class DeclarativeColumnsMetaclass(type):
-    def __new__(mcs, name, bases, attrs):
-        # Collect fields from current class.
-        current_fields = []
-        for key, value in list(attrs.items()):
-            if isinstance(value, Measure):
-                current_fields.append((key, value))
-                attrs.pop(key)
-        current_fields.sort(key=lambda x: x[1].creation_counter)
-        attrs['declared_fields'] = OrderedDict(current_fields)
-        return super(DeclarativeColumnsMetaclass, mcs).__new__(mcs, name, bases, attrs)
-
-
-class StatResult(object):
-    def __init__(self, fields, verbose_names, data):
-        self.fields = fields
-        self.verbose_names = verbose_names
-        self.data = data
-
-    def as_csv(self, show_header=True, line_spliter="\n", field_spliter="\t"):
-        data = self.data
-        if show_header:
-            data = [self.verbose_names] + data
-        return datautils.list2csv(self.data, line_spliter=line_spliter, field_spliter=field_spliter)
-
-    def __str__(self):
-        return self.as_csv()
-
-    def as_html(self, attrs="class='table table-striped table-hover'", row_attrs=""):
-        tpl = """<table %s>
-<thead>
-<tr>
-<th>%s</th>
-<tr>
-</thead>
-<tbody>
-<tr %s>
-<td>%s</td>
-</tr>
-</tbody></table>"""
-        return tpl % (attrs,
-                      "</th>\n<th>".join(self.verbose_names),
-                      row_attrs,
-                      datautils.list2csv(self.data, line_spliter="</td>\n</tr>\n<tr %s>\n<td>" % row_attrs,
-                                         field_spliter="</td>\n<td>")
-                      )
-
-
-class StatTableBase(object):
-    measure_params_dict = {}
-
-    def __init__(self, query_set):
-        self.query_set = query_set
-
-    def stat(self, group):
-        r = OrderedDict()
-        names = [group]
-        verbose_names = [modelutils.get_related_field(self.query_set.model, group).verbose_name]
-        for name, field in self.declared_fields.items():
-            cond = self.format_measure_condition(name, field)
-            if field.exclude == True:
-                qset = self.query_set.exclude(**cond)
-            else:
-                qset = self.query_set.filter(**cond)
-            qset = qset.distinct()
-            for d in qset.order_by(group).values(group).annotate(measure_value=field.agg):
-                g = d[group]
-                r.setdefault(g, OrderedDict())
-                value = d.get("measure_value")
-                r[g][name] = value
-            names.append(name)
-            verbose_names.append(field.verbose_name)
-        data = []
-        for k, v in r.items():
-            line = [k] + [v.get(name, field.default) for name, field in self.declared_fields.items()]
-            data.append(line)
-        return StatResult(names, verbose_names, data)
-
-    def format_measure_condition(self, name, measure):
-        r = {}
-        for k, v in measure.cond.items():
-            if isinstance(v, Parameter):
-                v = self.measure_params_dict.get(name, {}).get(v.name)
-            if callable(v):
-                v = v()
-            r[k] = v
-        return r
-
-    def set_measure_params(self, measure_name, **kwargs):
-        self.measure_params_dict[measure_name] = kwargs
-
-
-StatTable = DeclarativeColumnsMetaclass(str('StatTable'), (StatTableBase,), {})
-
-
-class StatObject(object):
-    def __init__(self, obj):
-        self.obj = obj
-
-    def __getitem__(self, item):
-        obj = self.obj
-        meta = obj._meta
-        fs = item.split("__")
-        f = fs[0]
-        field = meta.get_field(f)
-        if not hasattr(field, "related_model"):
-            raise Exception("%s is not a related_model", f)
-
-        relate = getattr(obj, f)
-        meta = field.related_model._meta
-        f = fs[1]
-        field = meta.get_field(f)
-        value = self._get_choice(field.choices, fs[2])
-        return relate.filter(**{f: value}).count()
-
-    def _get_choice(self, choices, value):
-        for k, t in choices:
-            if text_type(k) == value or t == value:
-                return k
-        return value
-
+#
+# class Measure(object):
+#     # Tracks each time a Field instance is created. Used to retain order.
+#     creation_counter = 0
+#
+#     def __init__(self, verbose_name, cond={}, exclude=False, agg=Count("id"), default=0):
+#         self.verbose_name = verbose_name
+#         self.cond = cond
+#         self.exclude = exclude
+#         self.agg = agg
+#         self.default = default
+#         # Increase the creation counter, and save our local copy.
+#         self.creation_counter = Measure.creation_counter
+#         Measure.creation_counter += 1
+#
+#
+# class Parameter(object):
+#     def __init__(self, name):
+#         self.name = name
+#
+#
+# class DeclarativeColumnsMetaclass(type):
+#     def __new__(mcs, name, bases, attrs):
+#         # Collect fields from current class.
+#         current_fields = []
+#         for key, value in list(attrs.items()):
+#             if isinstance(value, Measure):
+#                 current_fields.append((key, value))
+#                 attrs.pop(key)
+#         current_fields.sort(key=lambda x: x[1].creation_counter)
+#         attrs['declared_fields'] = OrderedDict(current_fields)
+#         return super(DeclarativeColumnsMetaclass, mcs).__new__(mcs, name, bases, attrs)
+#
+#
+# class StatResult(object):
+#     def __init__(self, fields, verbose_names, data):
+#         self.fields = fields
+#         self.verbose_names = verbose_names
+#         self.data = data
+#
+#     def as_csv(self, show_header=True, line_spliter="\n", field_spliter="\t"):
+#         data = self.data
+#         if show_header:
+#             data = [self.verbose_names] + data
+#         return datautils.list2csv(self.data, line_spliter=line_spliter, field_spliter=field_spliter)
+#
+#     def __str__(self):
+#         return self.as_csv()
+#
+#     def as_html(self, attrs="class='table table-striped table-hover'", row_attrs=""):
+#         tpl = """<table %s>
+# <thead>
+# <tr>
+# <th>%s</th>
+# <tr>
+# </thead>
+# <tbody>
+# <tr %s>
+# <td>%s</td>
+# </tr>
+# </tbody></table>"""
+#         return tpl % (attrs,
+#                       "</th>\n<th>".join(self.verbose_names),
+#                       row_attrs,
+#                       datautils.list2csv(self.data, line_spliter="</td>\n</tr>\n<tr %s>\n<td>" % row_attrs,
+#                                          field_spliter="</td>\n<td>")
+#                       )
+#
+#
+# class StatTableBase(object):
+#     measure_params_dict = {}
+#
+#     def __init__(self, query_set):
+#         self.query_set = query_set
+#
+#     def stat(self, group):
+#         r = OrderedDict()
+#         names = [group]
+#         verbose_names = [modelutils.get_related_field(self.query_set.model, group).verbose_name]
+#         for name, field in self.declared_fields.items():
+#             cond = self.format_measure_condition(name, field)
+#             if field.exclude == True:
+#                 qset = self.query_set.exclude(**cond)
+#             else:
+#                 qset = self.query_set.filter(**cond)
+#             qset = qset.distinct()
+#             for d in qset.order_by(group).values(group).annotate(measure_value=field.agg):
+#                 g = d[group]
+#                 r.setdefault(g, OrderedDict())
+#                 value = d.get("measure_value")
+#                 r[g][name] = value
+#             names.append(name)
+#             verbose_names.append(field.verbose_name)
+#         data = []
+#         for k, v in r.items():
+#             line = [k] + [v.get(name, field.default) for name, field in self.declared_fields.items()]
+#             data.append(line)
+#         return StatResult(names, verbose_names, data)
+#
+#     def format_measure_condition(self, name, measure):
+#         r = {}
+#         for k, v in measure.cond.items():
+#             if isinstance(v, Parameter):
+#                 v = self.measure_params_dict.get(name, {}).get(v.name)
+#             if callable(v):
+#                 v = v()
+#             r[k] = v
+#         return r
+#
+#     def set_measure_params(self, measure_name, **kwargs):
+#         self.measure_params_dict[measure_name] = kwargs
+#
+#
+# StatTable = DeclarativeColumnsMetaclass(str('StatTable'), (StatTableBase,), {})
+#
+#
+# class StatObject(object):
+#     def __init__(self, obj):
+#         self.obj = obj
+#
+#     def __getitem__(self, item):
+#         obj = self.obj
+#         meta = obj._meta
+#         fs = item.split("__")
+#         f = fs[0]
+#         field = meta.get_field(f)
+#         if not hasattr(field, "related_model"):
+#             raise Exception("%s is not a related_model", f)
+#
+#         relate = getattr(obj, f)
+#         meta = field.related_model._meta
+#         f = fs[1]
+#         field = meta.get_field(f)
+#         value = self._get_choice(field.choices, fs[2])
+#         return relate.filter(**{f: value}).count()
+#
+#     def _get_choice(self, choices, value):
+#         for k, t in choices:
+#             if text_type(k) == value or t == value:
+#                 return k
+#         return value
+#
 
 class StructorStat(object):
     def __init__(self, query_set, fields):
@@ -245,18 +245,6 @@ def group_by(qset, group, measures=None, sort=None, group_map=None):
 
 def count_by(qset, group, count_field='id', distinct=False, sort=None, group_map=None):
     return group_by(qset, group, measures=[Count(count_field, distinct=distinct)], sort=sort, group_map=group_map)
-    # if isinstance(group, string_types):
-    #     group = group.split(',')
-    # qset = qset.values(*group).order_by(*group)
-    # dl = qset.annotate(c=Count(count_field, distinct=distinct))
-    # if sort is not None:
-    #     dl = dl.order_by("%sc" % sort)
-    # fs = group + ['c']
-    # rs = [[d[f] for f in fs] for d in dl]
-    # if group_map:
-    #     for d in rs:
-    #         d[0] = group_map.get(d[0], d[0])
-    # return rs
 
 
 def count_by_generic_relation(qset, group, count_field='id', distinct=False, sort=None):
@@ -361,11 +349,6 @@ class DateStat(object):
 
     def stat(self, period=None, count_field='id', distinct=False, **kwargs):
         return self.group_by(period, measures=[Count(count_field, distinct=distinct)], **kwargs)
-        # qset = self.get_period_query_set(period).extra(select={'the_date': 'date(%s)' % self.time_field})
-        # res = count_by(qset, 'the_date', count_field=count_field, distinct=distinct, sort=sort)
-        # if only_first:
-        #     res = res[0] if len(res) > 0 else None
-        # return res
 
     def group_by(self, period=None, group=[], measures=None, sort=None, only_first=False, filter=None):
         qset = self.get_period_query_set(period)

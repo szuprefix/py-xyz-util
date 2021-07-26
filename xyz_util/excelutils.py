@@ -92,7 +92,7 @@ def filter_sheets_by_name(excel_file, re_sheet_name):
 class Reader(object):
 
     def __init__(self, excel, row_top=0, field_names_template=[], min_fields_count=1, col_name_formater=lambda c: c):
-        if isinstance(excel, (basestring,)):
+        if isinstance(excel, string_types):
             self.workbook = xlrd.open_workbook(excel)
         elif isinstance(excel, xlrd.Book):
             self.workbook = excel
@@ -174,7 +174,7 @@ def excel2json(excel, row_top=0, field_names_template=[], min_fields_count=1, co
         则认为当前sheet没有正式数据，直接忽略
     :return: 字典数组， 多个sheet的数据会合并到一个数组里，字典以表头字段名为key
     """
-    if isinstance(excel, (basestring,)):
+    if isinstance(excel, string_types):
         workbook = xlrd.open_workbook(excel)
     elif isinstance(excel, xlrd.Book):
         workbook = excel
@@ -234,14 +234,16 @@ class TableReader(object):
                         c += 1
                 rs.append((c, i))
             rs.sort()
-            d[fn] = ts[rs[-1][1]]
+            top = rs[-1]
+            if top[0] >0:
+                d[fn] = ts[top[1]]
         return d
 
     def transform(self, ds):
-        fm = self.recognize(ds[0].keys())
+        fm = self.recognize(list(ds[0].keys()))
         rs = []
         for d in ds:
-            nd = [(k, d.get(v, None)) for k, v in fm.items()]
+            nd = dict([(k, d.get(v, None)) for k, v in fm.items()])
             rs.append(nd)
         return rs
 
@@ -346,7 +348,7 @@ try:
                 if type(value).__name__ in self.styles:
                     cell_style = self.styles[type(value).__name__]
 
-                elif isinstance(value, basestring):
+                elif isinstance(value, string_types):
                     leading_zero_number_regex = re.compile(
                         r'^-?[0]+[0-9,]*$'
                     )

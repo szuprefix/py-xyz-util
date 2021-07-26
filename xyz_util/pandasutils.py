@@ -151,9 +151,10 @@ def group_by(df, dimensions, measures=None, agg='count', interval=None):
         dimensions[0] = df[dimensions[0]].dt.strftime(formats.get(interval))
     group = df.groupby(dimensions)
     if not measures:
-        return group[dimensions].agg(agg).to_frame(agg).reset_index()
+        df = group[dimensions].agg(agg)
     else:
-        return group[measures].agg(agg).reset_index()
+        df = group[measures].agg(agg)
+    return df.reset_index()
 
 
 def guess_dimension_category(n):
