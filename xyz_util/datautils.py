@@ -482,8 +482,22 @@ def import_function(s):
     except:
         return s
 
+
 def list_dict(l):
     d = {}
     for k, v in l:
         d.setdefault(k, []).append(v)
     return d
+
+
+def trim_by_length(s, ml, charset='utf8'):
+    l = 0
+    rs = ''
+    for c in s:
+        l += len(c.encode(charset))
+        if l > ml:
+            return rs
+        rs += c
+        if l == ml:
+            return rs
+    return rs

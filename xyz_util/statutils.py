@@ -351,7 +351,7 @@ class DateStat(object):
     def stat(self, period=None, count_field='id', distinct=False, **kwargs):
         return self.group_by(period, measures=[Count(count_field, distinct=distinct)], **kwargs)
 
-    def count_and_distinct(self, period=None, count_field='id',**kwargs):
+    def count_and_distinct(self, period=None, count_field='id', **kwargs):
         return self.group_by(period, measures=[Count(count_field), Count(count_field, distinct=True)], **kwargs)
 
     def group_by(self, period=None, group=[], only_first=False, filter=None, **kwargs):
@@ -432,10 +432,66 @@ Out[55]: {'a': {False: 3, True: 1}}
     return result
 
 
-def measure_split(mn):
-    aggfuns = ['count', 'sum', 'avg']
-    ps = mn.split('__')
-    for i,p in enumerate(ps):
-        if p in aggfuns:
-            return ps[:i], ps[i:]
-    return ps, []
+AGG_FUNCS = ['count', 'distinct', 'sum', 'avg']
+
+
+class QuerySetStat(object):
+
+    def __init__(self, qset, measures, group=None):
+        self.qset = qset
+        self.meta = qset.model._meta
+        if isinstance(measures, string_types):
+            measures = measures.split(',')
+        self.measures = [self.measure_split(m) for m in measures]
+        self.group = self.group_split(group) if group else None
+
+    def stat(self):
+        if self.group:
+            ms = []
+            for m in self.measures:
+                af = self.get_agg_function(m['field'].name, m['agg'])
+                ms.append[af]
+            gf = self.group['field']
+
+            return group_by(self.qset, ms)
+        else:
+            return
+
+    def get_agg_function(self, field, agg):
+        from django.db.models import Count, Sum, Avg
+        if agg == 'distinct':
+            return Count(field, distinct=True)
+        elif agg == 'count':
+            return Count(field)
+        elif agg == 'sum':
+            return Sum(field)
+        elif agg == 'avg':
+            return Avg(field)
+
+    def stat_measure(self, measure):
+        field, agg = self.measure_split(measure)
+        af = self.get_agg_function(field.name, agg)
+        return self.qset.aggregate(s=af)['s']
+
+    def measure_split(self, mn):
+        field = 'id'
+        agg = 'count'
+        if mn:
+            ps = mn.split('__')
+            for a in ps:
+                if a in AGG_FUNCS:
+                    agg = a
+                else:
+                    field = a
+        return dict(
+            field=self.meta.get_field(field),
+            agg=agg,
+            name=mn
+        )
+
+    def group_split(self, gn):
+        ps = gn.split('__')
+        return dict(
+            field=self.meta.get_field(ps[0]),
+            parts=ps[1:]
+        )
