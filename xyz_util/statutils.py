@@ -4,7 +4,7 @@ from collections import OrderedDict
 
 from django.db.models import Count
 from django.conf import settings
-from six import text_type,string_types
+from six import text_type, string_types
 
 from . import modelutils, datautils, dateutils
 
@@ -17,6 +17,7 @@ def using_stats_db(qset):
     if DB_FOR_STATS:
         qset = qset.using(DB_FOR_STATS)
     return qset
+
 
 #
 # class Measure(object):
@@ -271,7 +272,7 @@ def count_by_generic_relation(qset, group, count_field='id', distinct=False, sor
 
 
 def count_with_generic_relation(qset, group, count_field='id', trans_map={}):
-    return group_by_with_generic_relation(qset,group,measures=[Count(count_field)], trans_map=trans_map)
+    return group_by_with_generic_relation(qset, group, measures=[Count(count_field)], trans_map=trans_map)
 
 
 def group_by_with_generic_relation(qset, group, measures=[], trans_map={}):
@@ -350,12 +351,15 @@ class DateStat(object):
     def stat(self, period=None, count_field='id', distinct=False, **kwargs):
         return self.group_by(period, measures=[Count(count_field, distinct=distinct)], **kwargs)
 
-    def group_by(self, period=None, group=[], measures=None, sort=None, only_first=False, filter=None):
+    def count_and_distinct(self, period=None, count_field='id',**kwargs):
+        return self.group_by(period, measures=[Count(count_field), Count(count_field, distinct=True)], **kwargs)
+
+    def group_by(self, period=None, group=[], only_first=False, filter=None, **kwargs):
         qset = self.get_period_query_set(period)
         if filter:
-            qset=qset.filter(**filter)
+            qset = qset.filter(**filter)
         qset = qset.extra(select={'the_date': 'date(%s)' % self.time_field})
-        res = group_by(qset, ['the_date'] + group, measures=measures, sort=sort)
+        res = group_by(qset, ['the_date'] + group, **kwargs)
         if only_first:
             res = res[0] if len(res) > 0 else None
         return res
@@ -366,7 +370,7 @@ def do_rest_stat_action(view, stats_action):
     pms = view.request.query_params
     ms = pms.getlist('measures', ['all'])
     from rest_framework.response import Response
-    kwargs = dict(qset=qset, measures=ms, period = pms.get('period', '近7天'), time_field=pms.get('time_field'))
+    kwargs = dict(qset=qset, measures=ms, period=pms.get('period', '近7天'), time_field=pms.get('time_field'))
     return Response(stats_action(**kwargs))
 
 
@@ -426,3 +430,12 @@ Out[55]: {'a': {False: 3, True: 1}}
             m.setdefault(lv, 0)
             m[lv] += 1
     return result
+
+
+def measure_split(mn):
+    aggfuns = ['count', 'sum', 'avg']
+    ps = mn.split('__')
+    for i,p in enumerate(ps):
+        if p in aggfuns:
+            return ps[:i], ps[i:]
+    return ps, []
