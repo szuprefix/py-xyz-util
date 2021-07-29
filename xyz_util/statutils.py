@@ -5,7 +5,6 @@ from collections import OrderedDict
 from django.db.models import Count
 from django.conf import settings
 from six import text_type, string_types
-
 from . import modelutils, datautils, dateutils
 
 __author__ = 'denishuang'
@@ -222,11 +221,12 @@ class TimeStat(object):
         return r
 
 
-def group_by(qset, group, measures=None, sort=None, group_map=None):
+def group_by(qset, group, measures=None, sort=None, group_map=None, group_maps=None):
     if isinstance(group, string_types):
         group = [g.strip() for g in group.split(',') if g.strip()]
     if not measures:
         measures = [Count('id')]
+
     qset = qset.values(*group).order_by(*group)
     from collections import OrderedDict
     mm = OrderedDict()
@@ -238,9 +238,15 @@ def group_by(qset, group, measures=None, sort=None, group_map=None):
         dl = dl.order_by("%sf0" % sort)
     fs = group + list(mm.keys())
     rs = [[d[f] for f in fs] for d in dl]
-    if group_map:
-        for d in rs:
-            d[0] = group_map.get(d[0], d[0])
+
+    gms = {group[0]: group_map} if group_map else group_maps
+    if gms:
+        for gn, gm in gms.items():
+            if gm:
+                if isinstance(gm, (list, tuple)):
+                    gm = dict(gm)
+                for d in rs:
+                    d[0] = gm.get(d[0], d[0])
     return rs
 
 
@@ -358,7 +364,8 @@ class DateStat(object):
         qset = self.get_period_query_set(period)
         if filter:
             qset = qset.filter(**filter)
-        qset = qset.extra(select={'the_date': 'date(%s)' % self.time_field})
+        f = modelutils.get_related_field(qset, self.time_field)
+        qset = qset.extra(select={'the_date': 'date(%s.%s)' % (f.model._meta.db_table,self.time_field)})
         res = group_by(qset, ['the_date'] + group, **kwargs)
         if only_first:
             res = res[0] if len(res) > 0 else None
@@ -437,25 +444,39 @@ AGG_FUNCS = ['count', 'distinct', 'sum', 'avg']
 
 class QuerySetStat(object):
 
-    def __init__(self, qset, measures, group=None):
+    def __init__(self, qset, measures, groups=None):
         self.qset = qset
         self.meta = qset.model._meta
         if isinstance(measures, string_types):
             measures = measures.split(',')
         self.measures = [self.measure_split(m) for m in measures]
-        self.group = self.group_split(group) if group else None
+        if isinstance(groups, string_types):
+            groups = groups.split(',')
+        self.groups = [self.group_split(g) for g in groups if g] if groups else None
 
     def stat(self):
-        if self.group:
-            ms = []
-            for m in self.measures:
-                af = self.get_agg_function(m['field'].name, m['agg'])
-                ms.append[af]
-            gf = self.group['field']
-
-            return group_by(self.qset, ms)
+        if self.groups:
+            return self.stat_by_groups()
         else:
-            return
+            return self.stat_no_groups()
+
+    def stat_by_groups(self):
+        ms = []
+        for m in self.measures:
+            af = self.get_agg_function(m['field'].name, m['agg'])
+            ms.append(af)
+        qset = self.qset
+        gs = []
+        gms = {}
+        for g in self.groups:
+            qset_extra = g.get('qset_extra')
+            if qset_extra:
+                qset = qset.extra(qset_extra)
+            gs.append(g['name'])
+            m = g.get('map')
+            if m:
+                gms[g['name']] = m
+        return group_by(qset, gs, ms, group_map=gms)
 
     def get_agg_function(self, field, agg):
         from django.db.models import Count, Sum, Avg
@@ -468,10 +489,12 @@ class QuerySetStat(object):
         elif agg == 'avg':
             return Avg(field)
 
-    def stat_measure(self, measure):
-        field, agg = self.measure_split(measure)
-        af = self.get_agg_function(field.name, agg)
-        return self.qset.aggregate(s=af)['s']
+    def stat_no_groups(self):
+        ds = {}
+        for m in self.measures:
+            af = self.get_agg_function(m['field'].name, m['agg'])
+            ds[m['name']] = self.qset.aggregate(s=af)['s']
+        return ds
 
     def measure_split(self, mn):
         field = 'id'
@@ -490,8 +513,46 @@ class QuerySetStat(object):
         )
 
     def group_split(self, gn):
+        fp = gn
         ps = gn.split('__')
-        return dict(
-            field=self.meta.get_field(ps[0]),
-            parts=ps[1:]
+        func = None
+        if ps[-1] == 'date':
+            func = 'date'
+            fp = '__'.join(ps[:-1])
+        f = modelutils.get_related_field(self.qset, fp)
+        fvn = modelutils.get_related_field_verbose_name(self.qset, fp)
+        d = dict(
+            name=gn,
+            field=f,
+            label=fvn,
         )
+        if func == 'date':
+            d['qset_extra'] = dict(select={gn: 'date(%s.%s)' % (f.model._meta.db_table, fp)})
+            d['func'] = func
+        choices = getattr(f, 'choices')
+        if choices:
+            d['map'] = dict(choices)
+        return d
+
+    def get_descriptions(self):
+        ms = []
+        for m in self.measures:
+            mn = m['name']
+            f = m['field']
+            ms.append(dict(
+                name=mn,
+                label=f.verbose_name,
+                agg=m['agg']
+            ))
+        return dict(measures=ms)
+
+
+def smart_rest_stat_action(view):
+    qset = using_stats_db(view.filter_queryset(view.get_queryset())) if hasattr(view, 'get_queryset') else None
+    pms = view.request.query_params
+    ms = pms.get('measures', 'count')
+    st = QuerySetStat(qset, ms, groups=pms.get('groupby'))
+    from rest_framework.response import Response
+    d = st.get_descriptions()
+    d['data'] = st.stat()
+    return Response(d)
