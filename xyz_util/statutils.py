@@ -365,7 +365,7 @@ class DateStat(object):
         if filter:
             qset = qset.filter(**filter)
         f = modelutils.get_related_field(qset, self.time_field)
-        qset = qset.extra(select={'the_date': 'date(%s.%s)' % (f.model._meta.db_table,self.time_field)})
+        qset = qset.extra(select={'the_date': 'date(%s.%s)' % (f.model._meta.db_table, self.time_field)})
         res = group_by(qset, ['the_date'] + group, **kwargs)
         if only_first:
             res = res[0] if len(res) > 0 else None
@@ -535,6 +535,8 @@ class QuerySetStat(object):
         return d
 
     def get_descriptions(self):
+        m = self.meta
+        model = dict(name=m.label_lower, label= m.verbose_name)
         ms = []
         for m in self.measures:
             mn = m['name']
@@ -544,8 +546,31 @@ class QuerySetStat(object):
                 label=f.verbose_name,
                 agg=m['agg']
             ))
-        return dict(measures=ms)
+        rd = dict(measures=ms, model=model)
+        if self.groups:
+            gs = []
+            for g in self.groups:
+                gn = g['name']
+                f = g['field']
+                gs.append(dict(
+                    name=gn,
+                    label=f.verbose_name,
+                    func=g.get('func')
+                ))
+            rd['groups'] = gs
+        return rd
 
+
+def smart_filter_queryset(qset, query_str=None):
+    from url_filter.filtersets import ModelFilterSet
+    from django.http import QueryDict
+    r = QueryDict(query_str)
+    class MyFilterSet(ModelFilterSet):
+        class Meta(object):
+            model = qset.model
+    # qset = using_stats_db(qset)
+    fs = MyFilterSet(data=r, queryset=qset)
+    return fs.filter()
 
 def smart_rest_stat_action(view):
     qset = using_stats_db(view.filter_queryset(view.get_queryset())) if hasattr(view, 'get_queryset') else None

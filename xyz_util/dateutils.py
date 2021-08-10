@@ -28,6 +28,14 @@ def get_next_date(the_date=None, days=1):
     the_date = format_the_date(the_date)
     return the_date + timedelta(days=days)
 
+def date_range(begin_date, end_date):
+    d = format_the_date(begin_date)
+    end_date = format_the_date(end_date)
+    if end_date<d:
+        raise ValueError('end_date should be bigger than begin_date')
+    while end_date >= d:
+        yield d
+        d = d+timedelta(days=1)
 
 def get_this_and_next_monday(the_date=None):
     the_date = format_the_date(the_date)
