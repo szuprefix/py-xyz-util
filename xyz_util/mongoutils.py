@@ -3,8 +3,12 @@
 from __future__ import unicode_literals
 
 from django.conf import settings
+from django.utils.functional import cached_property
+from rest_framework.pagination import PageNumberPagination
+
 from .datautils import access
 import random
+from django.core.paginator import Paginator
 
 DEFAULT_DB = {
     'SERVER': 'mongodb://localhost:27017/',
@@ -53,3 +57,17 @@ class Store(object):
 
     def count_by(self, field):
         return self.collection.aggregate([{'$group':{'_id':'$%s'%field, 'count':{'$sum':1}}}])
+
+class MongoPaginator(Paginator):
+
+    @cached_property
+    def count(self):
+        print('count')
+        return self.object_list.count()
+
+
+class MongoPageNumberPagination(PageNumberPagination):
+    django_paginator_class = MongoPaginator
+    page_size = 100
+    page_size_query_param = 'page_size'
+    max_page_size = 1000
