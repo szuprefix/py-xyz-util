@@ -19,7 +19,7 @@ PROXY = getattr(settings, 'HTTP_PROXY', None)
 
 
 def md5(s):
-    return hashlib.md5(s).hexdigest()
+    return hashlib.md5(s.encode('utf8')).hexdigest()
 
 
 def import_function(s):
@@ -99,7 +99,7 @@ def ScrapyResponse(url, **kwargs):
 
 def extract_url(s):
     import re
-    s = s.replace(b'\xc2\xa0', ' ')
+    s = s.replace('\xc2\xa0', ' ')
     r = re.compile(r'\s')
     ps = r.split(s)
     for a in ps:
