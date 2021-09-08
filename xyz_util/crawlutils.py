@@ -51,7 +51,7 @@ def http_post(url, **kwargs):
 
 
 def http_request(url, data=None, mobile_mode=True, cookies='', referer=None, extra_headers={}, timeout=(20, 20),
-                 proxy=True):
+                 proxy=True, allow_redirects=True):
     headers = {
         "User-Agent": UA_MOBILE if mobile_mode else UA_PC,
         "Accept-Encoding": "gzip"
@@ -74,9 +74,9 @@ def http_request(url, data=None, mobile_mode=True, cookies='', referer=None, ext
                 p = p()
             proxies = {'http': 'http://' + p, 'https': 'http://' + p} if p else None
             if data:
-                r = requests.post(url, data, headers=headers, timeout=timeout, proxies=proxies, cookies=cookies)
+                r = requests.post(url, data, headers=headers, timeout=timeout, proxies=proxies, cookies=cookies, allow_redirects=allow_redirects)
             else:
-                r = requests.get(url, headers=headers, timeout=timeout, proxies=proxies, cookies=cookies)
+                r = requests.get(url, headers=headers, timeout=timeout, proxies=proxies, cookies=cookies, allow_redirects=allow_redirects)
             if 'charset' not in r.headers.get('Content-Type', ''):
                 r.encoding = 'utf8'
             if p:
