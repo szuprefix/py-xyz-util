@@ -77,8 +77,15 @@ class TimeStat(object):
             r[k] = data
         return r
 
+def extract_order_field(sort):
+    if not sort:
+        return '', 0
+    direction = '-' if sort[0] == '-' else ''
+    field_num = sort.replace('-', '')
+    field_num = int(field_num) if field_num else 0
+    return direction, field_num
 
-def group_by(qset, group, measures=None, sort=None, group_map=None, group_maps=None):
+def group_by(qset, group, measures=None, sort=None, limit=None, group_map=None, group_maps=None):
     if isinstance(group, string_types):
         group = [g.strip() for g in group.split(',') if g.strip()]
     if not measures:
@@ -92,7 +99,9 @@ def group_by(qset, group, measures=None, sort=None, group_map=None, group_maps=N
         mm[fn] = m
     dl = qset.annotate(**mm)
     if sort is not None:
-        dl = dl.order_by("%sf0" % sort)
+        dl = dl.order_by("%sf%s" % extract_order_field(sort))
+    if limit:
+        dl = dl[:limit]
     fs = group + list(mm.keys())
     rs = [[d[f] for f in fs] for d in dl]
 
@@ -107,8 +116,8 @@ def group_by(qset, group, measures=None, sort=None, group_map=None, group_maps=N
     return rs
 
 
-def count_by(qset, group, count_field='id', distinct=False, sort=None, group_map=None):
-    return group_by(qset, group, measures=[Count(count_field, distinct=distinct)], sort=sort, group_map=group_map)
+def count_by(qset, group, count_field='id', distinct=False, **kwargs):
+    return group_by(qset, group, measures=[Count(count_field, distinct=distinct)], **kwargs)
 
 
 def count_by_generic_relation(qset, group, count_field='id', distinct=False, sort=None):

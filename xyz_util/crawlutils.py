@@ -84,7 +84,7 @@ def http_request(url, data=None, mobile_mode=True, cookies='', referer=None, ext
             return r
         except (ProxyError, ConnectionError) as e:
             import traceback
-            log.warn('proxy %s error: %s', p, traceback.format_exc())
+            log.warn('proxy %s by %s spent %s seconds error: %s', url, p, (datetime.now() - btime).seconds, traceback.format_exc())
     if proxy:
         raise ProxyError('all proxies failed')
 
