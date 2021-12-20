@@ -16,6 +16,7 @@ DEFAULT_DB = {
 }
 DB = getattr(settings, 'MONGODB', DEFAULT_DB)
 
+
 class Store(object):
     name = 'test_mongo_store'
     timeout = DB.get('TIMEOUT', 3000)
@@ -31,7 +32,7 @@ class Store(object):
         count = cursor.count()
         if count == 0:
             return
-        p = random.randint(0, count-1)
+        p = random.randint(0, count - 1)
         cursor.skip(p)
         r = cursor.next()
         cursor.close()
@@ -52,11 +53,21 @@ class Store(object):
     def add_to_set(self, cond, value):
         self.collection.update(cond, {'$addToSet': value}, upsert=True)
 
-    def count(self):
-        return self.collection.count()
+    def count(self, filter=None, distinct=False):
+        if distinct:
+            gs = []
+            if filter:
+                gs.append({'$match': filter})
+            gs.append({'$group': {'_id': '$%s' % distinct}}),
+            gs.append({'$group': {'_id': 0, 'count': {'$sum': 1}}})
+            for a in self.collection.aggregate(gs):
+                return a['count']
+            return 0
+        return self.collection.count(filter)
 
     def count_by(self, field):
-        return self.collection.aggregate([{'$group':{'_id':'$%s'%field, 'count':{'$sum':1}}}])
+        return self.collection.aggregate([{'$group': {'_id': '$%s' % field, 'count': {'$sum': 1}}}])
+
 
 class MongoPaginator(Paginator):
 
