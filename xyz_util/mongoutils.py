@@ -65,6 +65,14 @@ class Store(object):
             return 0
         return self.collection.count(filter)
 
+    def sum(self, field, filter=None):
+        gs = []
+        if filter:
+            gs.append({'$match': filter})
+        gs.append({'$group': {'_id': 0, 'result': {'$sum': '$%s' % field}}})
+        for a in self.collection.aggregate(gs):
+            return a['result']
+        
     def count_by(self, field):
         return self.collection.aggregate([{'$group': {'_id': '$%s' % field, 'count': {'$sum': 1}}}])
 
