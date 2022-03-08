@@ -6,7 +6,7 @@ from django.conf import settings
 from django.utils.functional import cached_property
 from rest_framework.pagination import PageNumberPagination
 
-from .datautils import access
+from .datautils import access, import_function
 import random
 from django.core.paginator import Paginator
 
@@ -14,17 +14,23 @@ DEFAULT_DB = {
     'SERVER': 'mongodb://localhost:27017/',
     'DB': access(settings, 'DATABASES.default.NAME')
 }
-DB = getattr(settings, 'MONGODB', DEFAULT_DB)
+CONF = getattr(settings, 'MONGODB', DEFAULT_DB)
 
+
+def loadMongoDB(server=None, db=None, timeout=3000):
+    import pymongo
+    client = pymongo.MongoClient(server or CONF['SERVER'], serverSelectionTimeoutMS=timeout)
+    return getattr(client, db or CONF.get('DB', DEFAULT_DB['DB']))
+
+
+LOADER = import_function(CONF.get('LOADER', 'xyz_util.mongoutils:loadMongoDB'))
 
 class Store(object):
     name = 'test_mongo_store'
-    timeout = DB.get('TIMEOUT', 3000)
+    timeout = CONF.get('TIMEOUT', 3000)
 
     def __init__(self, server=None, db=None, name=None):
-        import pymongo
-        client = pymongo.MongoClient(server or DB['SERVER'], serverSelectionTimeoutMS=self.timeout)
-        self.db = getattr(client, db or DB.get('DB', DEFAULT_DB['DB']))
+        self.db = LOADER(server, db, self.timeout)
         self.collection = getattr(self.db, name or self.name)
 
     def random_get(self, *args, **kwargs):
@@ -37,6 +43,9 @@ class Store(object):
         r = cursor.next()
         cursor.close()
         return r
+
+    def random_find(self, cond={}, count=10):
+        return self.collection.aggregate([{'$match': cond}, {'$sample': {'size': count}}])
 
     def find(self, *args, **kwargs):
         return self.collection.find(*args, **kwargs)
@@ -72,7 +81,7 @@ class Store(object):
         gs.append({'$group': {'_id': 0, 'result': {'$sum': '$%s' % field}}})
         for a in self.collection.aggregate(gs):
             return a['result']
-        
+
     def count_by(self, field):
         return self.collection.aggregate([{'$group': {'_id': '$%s' % field, 'count': {'$sum': 1}}}])
 
@@ -81,7 +90,7 @@ class MongoPaginator(Paginator):
 
     @cached_property
     def count(self):
-        print('count')
+        # print('count')
         return self.object_list.count()
 
 
@@ -90,3 +99,8 @@ class MongoPageNumberPagination(PageNumberPagination):
     page_size = 100
     page_size_query_param = 'page_size'
     max_page_size = 1000
+
+def drop_id_field(c):
+    for a in c:
+        a.pop('_id')
+        yield a
