@@ -401,3 +401,12 @@ def get_model_field_verbose_name_map(m):
     for f in m._meta.get_fields():
         r[get_field_verbose_name(f)] = f
     return r
+
+def get_generic_related_objects(src_object, target_model):
+    if isinstance(target_model, string_types):
+        target_model = apps.get_model(target_model)
+    from django.contrib.contenttypes.models import ContentType
+    ct = ContentType.objects.get_for_model(src_object)
+    gfk = get_generic_foreign_key(target_model._meta)
+    cond = {gfk.ct_field: ct, gfk.fk_field: src_object.pk}
+    return target_model.objects.filter(**cond)
