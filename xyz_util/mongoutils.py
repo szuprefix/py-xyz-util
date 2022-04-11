@@ -28,6 +28,8 @@ LOADER = import_function(CONF.get('LOADER', 'xyz_util.mongoutils:loadMongoDB'))
 class Store(object):
     name = 'test_mongo_store'
     timeout = CONF.get('TIMEOUT', 3000)
+    field_types = {}
+    fields = None
 
     def __init__(self, server=None, db=None, name=None):
         self.db = LOADER(server, db, self.timeout)
@@ -85,6 +87,38 @@ class Store(object):
     def count_by(self, field):
         return self.collection.aggregate([{'$group': {'_id': '$%s' % field, 'count': {'$sum': 1}}}])
 
+    def clean_data(self, data):
+        d = {}
+        for a in data.keys():
+            if self.fields and a not in self.fields:
+                continue
+            d[a] = data[a]
+
+        for t, fs in self.field_types.items():
+            for f in fs:
+                if f in d:
+                    d[f] = t(d[f])
+        return d
+
+
+def normalize_filter_condition(data, field_types={}, fields=None):
+    d = {}
+    for a in data.keys():
+        v = data[a]
+        if a.endswith('__exists'):
+            sl = len('__exists')
+            v = {'$exists': int(data[a])}
+            a = a[:-sl]
+        if fields and a not in fields:
+            continue
+        d[a] = v
+
+    for t, fs in field_types.items():
+        for f in fs:
+            if f in d and not isinstance(d[f], dict):
+                d[f] = t(d[f])
+    return d
+
 
 class MongoPaginator(Paginator):
 
@@ -104,3 +138,9 @@ def drop_id_field(c):
     for a in c:
         a.pop('_id')
         yield a
+
+def get_paginated_response(view, query):
+    pager = MongoPageNumberPagination()
+    ds = pager.paginate_queryset(query, view.request, view=view)
+    return pager.get_paginated_response(list(drop_id_field(ds)))
+
