@@ -74,9 +74,11 @@ def http_request(url, data=None, mobile_mode=True, cookies='', referer=None, ext
                 p = p()
             proxies = {'http': 'http://' + p, 'https': 'http://' + p} if p else None
             if data:
-                r = requests.post(url, data, headers=headers, timeout=timeout, proxies=proxies, cookies=cookies, allow_redirects=allow_redirects)
+                r = requests.post(url, data, headers=headers, timeout=timeout, proxies=proxies, cookies=cookies,
+                                  allow_redirects=allow_redirects)
             else:
-                r = requests.get(url, headers=headers, timeout=timeout, proxies=proxies, cookies=cookies, allow_redirects=allow_redirects)
+                r = requests.get(url, headers=headers, timeout=timeout, proxies=proxies, cookies=cookies,
+                                 allow_redirects=allow_redirects)
             if 'charset' not in r.headers.get('Content-Type', ''):
                 r.encoding = 'utf8'
             if p:
@@ -84,7 +86,8 @@ def http_request(url, data=None, mobile_mode=True, cookies='', referer=None, ext
             return r
         except (ProxyError, ConnectionError) as e:
             import traceback
-            log.warn('proxy %s by %s spent %s seconds error: %s', url, p, (datetime.now() - btime).seconds, traceback.format_exc())
+            log.warn('proxy %s by %s spent %s seconds error: %s', url, p, (datetime.now() - btime).seconds,
+                     traceback.format_exc())
     if proxy:
         raise ProxyError('all proxies failed')
 
@@ -128,3 +131,32 @@ def extract_between(s, a, b):
     if len(ps) < 2:
         return None
     return ps[1].split(b)[0]
+
+
+class Browser(object):
+
+    def __init__(self):
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
+        chrome_options = Options()
+        chrome_options.add_argument(
+            "user-agent=Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.125 Safari/537.36")
+        self.driver = webdriver.Chrome(options=chrome_options)
+
+    def element(self, css):
+        from selenium.webdriver.support.wait import WebDriverWait
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support import expected_conditions as EC
+        return WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, css)))
+
+
+    def get(self, url):
+        self.driver.get(url)
+
+    def get_bs_root(self):
+        from bs4 import BeautifulSoup
+        return BeautifulSoup(self.driver.page_source, 'html.parser')
+
+    def swith_iframe(self, frame_id):
+        self.element("#%s" % frame_id)
+        self.driver.switch_to.frame(frame_id)
