@@ -9,6 +9,7 @@ from django.conf import settings
 from datetime import datetime
 import hashlib
 import logging
+from time import sleep
 
 log = logging.getLogger('django')
 
@@ -157,6 +158,43 @@ class Browser(object):
         from bs4 import BeautifulSoup
         return BeautifulSoup(self.driver.page_source, 'html.parser')
 
+    def element_to_bs(self, e):
+        from bs4 import BeautifulSoup
+        return BeautifulSoup(e.get_attribute('outerHTML'), 'html.parser')
+
     def swith_iframe(self, frame_id):
         self.element("#%s" % frame_id)
         self.driver.switch_to.frame(frame_id)
+
+    def backspace_clean(self, element, deviation=3):
+        """
+        退格原理清除输入框中的内容
+        :param element: 需要操作的元素
+        :param deviation: 退格数偏差,默认会多输入3个以确保可靠度
+        """
+        from selenium.webdriver.common.keys import Keys
+        quantity = len(element.get_attribute("value")) + deviation
+        for _ in range(quantity):
+            element.send_keys(Keys.BACKSPACE)
+
+
+    def clean_with_send(self, element, text, **kwargs):
+        """
+        清空输入框并且输入内容
+        :param element: 需要操作的元素
+        :param text: 输入的内容
+        """
+        self.backspace_clean(element, **kwargs)
+        element.send_keys(text)
+
+def retry(func, times=3, interval=10):
+    try:
+        return func()
+    except:
+        if times > 1:
+            sleep(interval)
+            print('retrying...')
+            return retry(func, times - 1, interval*2)
+        import traceback
+        traceback.print_exc()
+        raise Exception('retry failed')
