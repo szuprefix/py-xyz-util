@@ -84,8 +84,15 @@ class Store(object):
         for a in self.collection.aggregate(gs):
             return a['result']
 
-    def count_by(self, field):
-        return self.collection.aggregate([{'$group': {'_id': '$%s' % field, 'count': {'$sum': 1}}}])
+    def count_by(self, field, filter=None, output='array'):
+        ps = []
+        if filter:
+            ps.append({'$match': filter})
+        ps.append({'$group': {'_id': '$%s' % field, 'count': {'$sum': 1}}})
+        rs = self.collection.aggregate(ps)
+        if output == 'dict':
+            rs = dict([(a['_id'], a['count'])for a in rs])
+        return rs
 
     def clean_data(self, data):
         d = {}
@@ -144,3 +151,24 @@ def get_paginated_response(view, query):
     ds = pager.paginate_queryset(query, view.request, view=view)
     return pager.get_paginated_response(list(drop_id_field(ds)))
 
+
+def model_get_and_patch(view, default={}, field_names=None):
+    from rest_framework.response import Response
+    a = view.get_object()
+    tn = a._meta.label_lower.replace('.', '_')
+    st = Store(name=tn)
+    fns = field_names or [view.action]
+    if view.request.method == 'GET':
+        fd = {'_id': 0}
+        for fn in fns:
+            fd[fn] = 1
+        d = st.collection.find_one({'id': a.id}, fd)
+        return Response(d)
+    else:
+        rd = view.request.data
+        pd = {}
+        for k in rd:
+            if k.split('.')[0] in fns:
+                pd[k] = rd[k]
+        d = st.upsert({'id': a.id}, pd)
+        return Response(d)

@@ -3,7 +3,6 @@
 from __future__ import unicode_literals
 import re
 from requests.exceptions import ProxyError, ConnectionError
-from scrapy.http import HtmlResponse
 import requests
 from django.conf import settings
 from datetime import datetime
@@ -94,6 +93,7 @@ def http_request(url, data=None, mobile_mode=True, cookies='', referer=None, ext
 
 
 def ScrapyResponse(url, **kwargs):
+    from scrapy.http import HtmlResponse
     encoding = kwargs.pop('encoding', None)
     r = http_get(url, **kwargs)
     hr = HtmlResponse(url=r.url, encoding=encoding or 'utf8', body=r.content)
