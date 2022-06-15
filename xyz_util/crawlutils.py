@@ -4,7 +4,6 @@ from __future__ import unicode_literals
 import re
 from requests.exceptions import ProxyError, ConnectionError
 import requests
-from django.conf import settings
 from datetime import datetime
 import hashlib
 import logging
@@ -15,8 +14,11 @@ log = logging.getLogger('django')
 UA_MOBILE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1'
 UA_PC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.125 Safari/537.36'
 
-PROXY = getattr(settings, 'HTTP_PROXY', None)
-
+try:
+    from django.conf import settings
+    PROXY = getattr(settings, 'HTTP_PROXY', None)
+except:
+    PROXY = None
 
 def md5(s):
     return hashlib.md5(s.encode('utf8')).hexdigest()
