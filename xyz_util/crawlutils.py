@@ -139,12 +139,25 @@ def extract_between(s, a, b):
 class Browser(object):
 
     def __init__(self):
+        self.reload()
+
+    def reload(self, url=False):
+        if hasattr(self, 'driver'):
+            try:
+                if url is True:
+                    url = self.driver.current_url
+                self.driver.close()
+            except:
+                pass
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
         chrome_options = Options()
         chrome_options.add_argument(
             "user-agent=Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.125 Safari/537.36")
         self.driver = webdriver.Chrome(options=chrome_options)
+        from six import text_type
+        if isinstance(url, text_type):
+            self.driver.get(url)
 
     def element(self, css):
         from selenium.webdriver.support.wait import WebDriverWait
