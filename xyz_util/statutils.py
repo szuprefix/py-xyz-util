@@ -119,6 +119,19 @@ def group_by(qset, group, measures=None, sort=None, limit=None, group_map=None, 
 def count_by(qset, group, count_field='id', distinct=False, **kwargs):
     return group_by(qset, group, measures=[Count(count_field, distinct=distinct)], **kwargs)
 
+def rank_by(qset, group, measure=None, top=10):
+    if not measure:
+        measure = Count('id')
+    order_field = "f"
+    if top<0:
+        top = -top
+        order_field = "-f"
+    rs = qset.values(group).order_by(group).annotate(f=measure).order_by(order_field)[:top]
+    d = OrderedDict()
+    for a in rs:
+        d[a[group]] = a['f']
+    return d
+
 
 def count_by_generic_relation(qset, group, count_field='id', distinct=False, sort=None):
     rfs = modelutils.get_related_fields(qset, group)
@@ -325,6 +338,11 @@ class QuerySetStat(object):
             return self.stat_by_groups()
         else:
             return self.stat_no_groups()
+
+    def rank(self, top=-10):
+        m = self.measures[0]
+        af = self.get_agg_function(m['field'].name, m['agg'])
+        return rank_by(self.qset, self.groups[0]['name'], measure=af, top=top)
 
     def stat_by_groups(self):
         ms = []

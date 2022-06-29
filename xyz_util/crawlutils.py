@@ -8,6 +8,7 @@ from datetime import datetime
 import hashlib
 import logging
 from time import sleep
+from six import text_type
 
 log = logging.getLogger('django')
 
@@ -135,10 +136,16 @@ def extract_between(s, a, b):
         return None
     return ps[1].split(b)[0]
 
+MOBILE_EMULATION = {
+    "deviceMetrics": {"width": 360, "height": 640, "pixelRatio": 3.0},  # 定义设备高宽，像素比
+    "userAgent": UA_MOBILE
+}
 
 class Browser(object):
 
-    def __init__(self):
+    def __init__(self, mobile_mode=False):
+        self.mobile_mode = mobile_mode
+        self.extracted_data = {}
         self.reload()
 
     def reload(self, url=False):
@@ -151,11 +158,15 @@ class Browser(object):
                 pass
         from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
-        chrome_options = Options()
-        chrome_options.add_argument(
-            "user-agent=Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.125 Safari/537.36")
-        self.driver = webdriver.Chrome(options=chrome_options)
-        from six import text_type
+        options = Options()
+        if self.mobile_mode:
+            options.add_experimental_option('mobileEmulation', MOBILE_EMULATION)
+        else:
+            options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            options.add_experimental_option('useAutomationExtension', False)
+            options.add_argument("--disable-blink-features=AutomationControlled")
+            options.add_argument("user-agent=%s" % UA_PC)
+        self.driver = webdriver.Chrome(options=options)
         if isinstance(url, text_type):
             self.driver.get(url)
 
@@ -173,6 +184,13 @@ class Browser(object):
         from bs4 import BeautifulSoup
         return BeautifulSoup(self.driver.page_source, 'html.parser')
 
+    def extract(self, key, ele_path, attribute=None):
+        e = self.element(ele_path)
+        self.extracted_data[key] = e.get_attribute(attribute) if attribute else e.text
+
+    def start_extract(self):
+        self.extracted_data = {}
+
     def element_to_bs(self, e):
         from bs4 import BeautifulSoup
         return BeautifulSoup(e.get_attribute('outerHTML'), 'html.parser')
@@ -187,6 +205,8 @@ class Browser(object):
         :param element: 需要操作的元素
         :param deviation: 退格数偏差,默认会多输入3个以确保可靠度
         """
+        if isinstance(element, text_type):
+            element = self.element(element)
         from selenium.webdriver.common.keys import Keys
         quantity = len(element.get_attribute("value")) + deviation
         for _ in range(quantity):
@@ -201,6 +221,13 @@ class Browser(object):
         """
         self.backspace_clean(element, **kwargs)
         element.send_keys(text)
+
+    def run_script(self, script):
+        for l in script.split('\n'):
+            s = l.strip()
+            if not s:
+                continue
+            eval('self.%s' %s)
 
 def retry(func, times=3, interval=10):
     try:
