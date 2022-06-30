@@ -156,15 +156,19 @@ class Browser(object):
                 self.driver.close()
             except:
                 pass
-        from selenium import webdriver
+        try:
+            import undetected_chromedriver as webdriver
+            print('#######using undetected_chromedriver#######')
+        except:
+            from selenium import webdriver
         from selenium.webdriver.chrome.options import Options
         options = Options()
         if self.mobile_mode:
             options.add_experimental_option('mobileEmulation', MOBILE_EMULATION)
         else:
-            options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            options.add_experimental_option('useAutomationExtension', False)
-            options.add_argument("--disable-blink-features=AutomationControlled")
+            # options.add_experimental_option("excludeSwitches", ["enable-automation"])
+            # options.add_experimental_option('useAutomationExtension', False)
+            # options.add_argument("--disable-blink-features=AutomationControlled")
             options.add_argument("user-agent=%s" % UA_PC)
         self.driver = webdriver.Chrome(options=options)
         if isinstance(url, text_type):
