@@ -126,7 +126,7 @@ def rank_by(qset, group, measure=None, top=10):
     if top<0:
         top = -top
         order_field = "-f"
-    rs = qset.values(group).order_by(group).annotate(f=measure).order_by(order_field)[:top]
+    rs = qset.values(group).order_by(group).annotate(f=measure).order_by(order_field)[:top+1]
     d = OrderedDict()
     for a in rs:
         d[a[group]] = a['f']
