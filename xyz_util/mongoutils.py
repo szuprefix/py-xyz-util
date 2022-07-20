@@ -52,12 +52,14 @@ class Store(object):
     def find(self, *args, **kwargs):
         return self.collection.find(*args, **kwargs)
 
-    def upsert(self, cond, value, add_to_set=None, inc=None):
+    def upsert(self, cond, value, add_to_set=None, inc=None, pull=None):
         d = {'$set': value}
         if add_to_set:
             d['$addToSet'] = add_to_set
         if inc:
             d['$inc'] = inc
+        if pull:
+            d['$pull'] = pull
         self.collection.update_one(cond, d, upsert=True)
 
     def update(self, cond, value, **kwargs):
@@ -89,10 +91,12 @@ class Store(object):
         for a in self.collection.aggregate(gs):
             return a['result']
 
-    def count_by(self, field, filter=None, output='array'):
+    def count_by(self, field, filter=None, output='array', unwind=False):
         ps = []
         if filter:
             ps.append({'$match': filter})
+        if unwind:
+            ps.append({ '$unwind' : '$%s' % field })
         ps.append({'$group': {'_id': '$%s' % field, 'count': {'$sum': 1}}})
         rs = self.collection.aggregate(ps)
         if output == 'dict':
