@@ -17,9 +17,11 @@ UA_PC = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHT
 
 try:
     from django.conf import settings
+
     PROXY = getattr(settings, 'HTTP_PROXY', None)
 except:
     PROXY = None
+
 
 def md5(s):
     return hashlib.md5(s.encode('utf8')).hexdigest()
@@ -136,10 +138,12 @@ def extract_between(s, a, b):
         return None
     return ps[1].split(b)[0]
 
+
 MOBILE_EMULATION = {
     "deviceMetrics": {"width": 360, "height": 640, "pixelRatio": 3.0},  # 定义设备高宽，像素比
     "userAgent": UA_MOBILE
 }
+
 
 class Browser(object):
 
@@ -180,7 +184,6 @@ class Browser(object):
         from selenium.webdriver.support import expected_conditions as EC
         return WebDriverWait(self.driver, 10).until(EC.presence_of_element_located((By.CSS_SELECTOR, css)))
 
-
     def get(self, url):
         self.driver.get(url)
 
@@ -191,6 +194,15 @@ class Browser(object):
     def extract(self, key, ele_path, attribute=None):
         e = self.element(ele_path)
         self.extracted_data[key] = e.get_attribute(attribute) if attribute else e.text
+
+    def get_element_value(self, element, path, limit=1):
+        ps = path.split("::")
+        es = element.select(ps[0], limit=limit)
+        from .datautils import access
+        rs = [access(e, ps[1]) if len(ps) > 1 else e for e in es]
+        if limit == 1:
+            return None if not rs else rs[0]
+        return rs
 
     def start_extract(self):
         self.extracted_data = {}
@@ -216,7 +228,6 @@ class Browser(object):
         for _ in range(quantity):
             element.send_keys(Keys.BACKSPACE)
 
-
     def clean_with_send(self, element, text, **kwargs):
         """
         清空输入框并且输入内容
@@ -231,7 +242,28 @@ class Browser(object):
             s = l.strip()
             if not s:
                 continue
-            eval('self.%s' %s)
+            eval('self.%s' % s)
+
+    def crawl(self, element, conf):
+        if isinstance(conf, text_type):
+            return self.get_element_value(element, conf)
+        if isinstance(conf, (list, tuple)):
+            ls = []
+            for a in conf:
+                ls += self.crawl(element, a)
+            return ls
+        ls = []
+        ep = conf.pop('$', None)
+        es = [element]
+        if ep:
+            es = self.get_element_value(element, ep, limit=None)
+        for e in es:
+            d = {}
+            for k, v in conf.items():
+                d[k] = self.crawl(e, v)
+            ls.append(d)
+        return ls if ep else ls[0]
+
 
 def retry(func, times=3, interval=10):
     try:
@@ -240,7 +272,7 @@ def retry(func, times=3, interval=10):
         if times > 1:
             sleep(interval)
             print('retrying...')
-            return retry(func, times - 1, interval*2)
+            return retry(func, times - 1, interval * 2)
         import traceback
         traceback.print_exc()
         raise Exception('retry failed')
