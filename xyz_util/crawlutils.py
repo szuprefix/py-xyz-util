@@ -280,3 +280,9 @@ def retry(func, times=3, interval=10):
         import traceback
         traceback.print_exc()
         raise Exception('retry failed')
+
+def readability_summary(url, html_partial=True):
+    r = ScrapyResponse(url)
+    from readability import Document
+    doc = Document(r.text)
+    return doc.summary(html_partial=html_partial)
