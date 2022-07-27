@@ -62,6 +62,10 @@ class Store(object):
             d['$pull'] = pull
         self.collection.update_one(cond, d, upsert=True)
 
+    def batch_upsert(self, data_list, key='id'):
+        for d in data_list:
+            self.upsert({key:d[key]}, d)
+
     def update(self, cond, value, **kwargs):
         self.collection.update_many(cond, {'$set': value}, **kwargs)
 

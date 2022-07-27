@@ -258,6 +258,14 @@ def clear_dict_keys(d, *args):
         if a in d:
             d.pop(a)
 
+def gen_sub_dict(d, prefix=None):
+    nd = {}
+    p = len(prefix)
+    for k, v in d.items():
+        if k.startswith(prefix):
+            fn = k[p:].lower()
+            nd[fn] = v
+    return nd
 
 common_used_numerals = {'零': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9,
                         '十': 10, '百': 100, '千': 1000, '万': 10000, '亿': 100000000}

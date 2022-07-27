@@ -244,23 +244,27 @@ class Browser(object):
                 continue
             eval('self.%s' % s)
 
-    def crawl(self, element, conf):
+    def crawl(self, conf, element=None):
+        if not element:
+            element = self.get_bs_root()
         if isinstance(conf, text_type):
             return self.get_element_value(element, conf)
         if isinstance(conf, (list, tuple)):
             ls = []
             for a in conf:
-                ls += self.crawl(element, a)
+                ls += self.crawl(a, element)
             return ls
         ls = []
-        ep = conf.pop('$', None)
+        ep = conf.get('$', None)
         es = [element]
         if ep:
             es = self.get_element_value(element, ep, limit=None)
         for e in es:
             d = {}
             for k, v in conf.items():
-                d[k] = self.crawl(e, v)
+                if k == '$':
+                    continue
+                d[k] = self.crawl(v, e)
             ls.append(d)
         return ls if ep else ls[0]
 
