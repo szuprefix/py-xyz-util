@@ -46,8 +46,11 @@ class Store(object):
         cursor.close()
         return r
 
-    def random_find(self, cond={}, count=10):
-        return self.collection.aggregate([{'$match': cond}, {'$sample': {'size': count}}])
+    def random_find(self, cond={}, count=10, fields=None):
+        fs = [{'$match': cond}, {'$sample': {'size': count}}]
+        if fields:
+            fs.append({'$project': fields})
+        return self.collection.aggregate(fs)
 
     def find(self, *args, **kwargs):
         return self.collection.find(*args, **kwargs)
@@ -62,9 +65,12 @@ class Store(object):
             d['$pull'] = pull
         self.collection.update_one(cond, d, upsert=True)
 
-    def batch_upsert(self, data_list, key='id'):
-        for d in data_list:
+    def batch_upsert(self, data_list, key='id', preset=lambda a, i: a):
+        i = -1
+        for i, d in enumerate(data_list):
+            preset(d, i)
             self.upsert({key:d[key]}, d)
+        return i+1
 
     def update(self, cond, value, **kwargs):
         self.collection.update_many(cond, {'$set': value}, **kwargs)
