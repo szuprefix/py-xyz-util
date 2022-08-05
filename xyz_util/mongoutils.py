@@ -25,6 +25,7 @@ def loadMongoDB(server=None, db=None, timeout=3000):
 
 LOADER = import_function(CONF.get('LOADER', 'xyz_util.mongoutils:loadMongoDB'))
 
+
 class Store(object):
     name = 'test_mongo_store'
     timeout = CONF.get('TIMEOUT', 3000)
@@ -36,17 +37,10 @@ class Store(object):
         self.collection = getattr(self.db, name or self.name)
 
     def random_get(self, *args, **kwargs):
-        cursor = self.collection.find(*args, **kwargs)
-        count = cursor.count()
-        if count == 0:
-            return
-        p = random.randint(0, count - 1)
-        cursor.skip(p)
-        r = cursor.next()
-        cursor.close()
-        return r
+        rs = list(self.random_find(args[0], count=1, **kwargs))
+        return rs[0] if rs else None
 
-    def random_find(self, cond={}, count=10, fields=None):
+    def random_find(self, cond={}, count=10, fields={'_id': 0}):
         fs = [{'$match': cond}, {'$sample': {'size': count}}]
         if fields:
             fs.append({'$project': fields})
@@ -55,22 +49,18 @@ class Store(object):
     def find(self, *args, **kwargs):
         return self.collection.find(*args, **kwargs)
 
-    def upsert(self, cond, value, add_to_set=None, inc=None, pull=None):
+    def upsert(self, cond, value, **kwargs):
         d = {'$set': value}
-        if add_to_set:
-            d['$addToSet'] = add_to_set
-        if inc:
-            d['$inc'] = inc
-        if pull:
-            d['$pull'] = pull
+        for k, v in kwargs.items():
+            d['$%s' % k] = v
         self.collection.update_one(cond, d, upsert=True)
 
     def batch_upsert(self, data_list, key='id', preset=lambda a, i: a):
         i = -1
         for i, d in enumerate(data_list):
             preset(d, i)
-            self.upsert({key:d[key]}, d)
-        return i+1
+            self.upsert({key: d[key]}, d)
+        return i + 1
 
     def update(self, cond, value, **kwargs):
         self.collection.update_many(cond, {'$set': value}, **kwargs)
@@ -106,11 +96,11 @@ class Store(object):
         if filter:
             ps.append({'$match': filter})
         if unwind:
-            ps.append({ '$unwind' : '$%s' % field })
+            ps.append({'$unwind': '$%s' % field})
         ps.append({'$group': {'_id': '$%s' % field, 'count': {'$sum': 1}}})
         rs = self.collection.aggregate(ps)
         if output == 'dict':
-            rs = dict([(a['_id'], a['count'])for a in rs])
+            rs = dict([(a['_id'], a['count']) for a in rs])
         return rs
 
     def clean_data(self, data):
@@ -160,10 +150,12 @@ class MongoPageNumberPagination(PageNumberPagination):
     page_size_query_param = 'page_size'
     max_page_size = 1000
 
+
 def drop_id_field(c):
     for a in c:
-        a.pop('_id')
+        a.pop('_id', None)
         yield a
+
 
 def get_paginated_response(view, query):
     pager = MongoPageNumberPagination()

@@ -369,8 +369,9 @@ def get_relations(m1, m2):
 
 
 def get_model_related_field(m1, m2):
-    fs = [f for f in m1._meta.get_fields() if f.is_relation and f.related_model == m2]
-    return fs[0] if fs else None
+    return find_field(m1, lambda f:  f.is_relation and f.related_model == m2)
+    # fs = [f for f in m1._meta.get_fields() if f.is_relation and f.related_model == m2]
+    # return fs[0] if fs else None
 
 
 def distinct(qset, field_name):
