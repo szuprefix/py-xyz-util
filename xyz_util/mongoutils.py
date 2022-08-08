@@ -63,7 +63,12 @@ class Store(object):
         return i + 1
 
     def update(self, cond, value, **kwargs):
-        self.collection.update_many(cond, {'$set': value}, **kwargs)
+        d = {}
+        if value:
+            d['$set'] = value
+        for k, v in kwargs.items():
+            d['$%s' % k] = v
+        self.collection.update_many(cond, d)
 
     def inc(self, cond, value):
         self.collection.update(cond, {'$inc': value}, upsert=True)
