@@ -31,6 +31,7 @@ class Store(object):
     timeout = CONF.get('TIMEOUT', 3000)
     field_types = {}
     fields = None
+    search_fields = []
 
     def __init__(self, server=None, db=None, name=None):
         self.db = LOADER(server, db, self.timeout)
@@ -121,14 +122,37 @@ class Store(object):
                     d[f] = t(d[f])
         return d
 
+    def normalize_filter(self, data):
+        return normalize_filter_condition(data, self.field_types, self.fields, self.search_fields)
 
-def normalize_filter_condition(data, field_types={}, fields=None):
+
+def normalize_filter_condition(data, field_types={}, fields=None, search_fields=[]):
     d = {}
+    if search_fields:
+        sv = data.get('search')
+        if sv:
+            v = {'$regex': sv}
+            for fn in search_fields:
+                d = {'$or': [d, {fn:v}]} if d else {fn: v}
     for a in data.keys():
+        if a == 'search':
+            continue
         v = data[a]
         if a.endswith('__exists'):
             sl = len('__exists')
-            v = {'$exists': int(data[a])}
+            v = {'$exists': v not in ['0', 'false']}
+            a = a[:-sl]
+        elif a.endswith('__isnull'):
+            sl = len('__isnull')
+            v = {'$ne' if v in ['0', 'false', ''] else '$eq': None}
+            a = a[:-sl]
+        elif a.endswith('__regex'):
+            sl = len('__regex')
+            v = {'$regex': v}
+            a = a[:-sl]
+        elif a.endswith('__in'):
+            sl = len('__in')
+            v = {'$in': v.split(',')}
             a = a[:-sl]
         if fields and a not in fields:
             continue
@@ -138,6 +162,7 @@ def normalize_filter_condition(data, field_types={}, fields=None):
         for f in fs:
             if f in d and not isinstance(d[f], dict):
                 d[f] = t(d[f])
+    print(d)
     return d
 
 
@@ -188,3 +213,23 @@ def model_get_and_patch(view, default={}, field_names=None):
                 pd[k] = rd[k]
         d = st.upsert({'id': a.id}, pd)
         return Response(d)
+
+from rest_framework import viewsets, response
+class MongoViewSet(viewsets.ViewSet):
+    store_name = None
+    store_class = None
+
+    def __init__(self,**kwargs):
+        super(MongoViewSet, self).__init__(**kwargs)
+        if self.store_class:
+            self.store = self.store_class()
+        elif self.store_name:
+            self.store = Store(name=self.store_name)
+
+    def list(self, request):
+        cond = self.store.normalize_filter(request.query_params)
+        rs = self.store.find(cond)
+        return get_paginated_response(self, rs)
+
+    def retrieve(self, request, pk):
+        return response.Response(self.store.collection.find_one(dict(id=pk), {'_id': 0}))
