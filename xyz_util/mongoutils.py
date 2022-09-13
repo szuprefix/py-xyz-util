@@ -25,6 +25,13 @@ def loadMongoDB(server=None, db=None, timeout=3000):
 
 LOADER = import_function(CONF.get('LOADER', 'xyz_util.mongoutils:loadMongoDB'))
 
+def regex_contains(s):
+    ns = ''
+    for a in s:
+        if a in '+.?()[]*':
+            ns+='\\'
+        ns+=a
+    return {'$regex': ns}
 
 class Store(object):
     name = 'test_mongo_store'
@@ -69,7 +76,7 @@ class Store(object):
             d['$set'] = value
         for k, v in kwargs.items():
             d['$%s' % k] = v
-        self.collection.update_many(cond, d)
+        return self.collection.update_many(cond, d)
 
     def inc(self, cond, value):
         self.collection.update(cond, {'$inc': value}, upsert=True)
@@ -231,5 +238,8 @@ class MongoViewSet(viewsets.ViewSet):
         rs = self.store.find(cond)
         return get_paginated_response(self, rs)
 
+    def get_object(self):
+        return self.store.collection.find_one(dict(id=self.kwargs['pk']), {'_id': 0})
+    
     def retrieve(self, request, pk):
-        return response.Response(self.store.collection.find_one(dict(id=pk), {'_id': 0}))
+        return response.Response(self.get_object())
