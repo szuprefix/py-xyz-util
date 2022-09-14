@@ -33,12 +33,20 @@ def regex_contains(s):
         ns+=a
     return {'$regex': ns}
 
+def django_order_field_to_mongo_sort(s):
+    d = 1
+    if s.startswith('-'):
+        d = -1
+        s = s[1:]
+    return (s, d)
+
 class Store(object):
     name = 'test_mongo_store'
     timeout = CONF.get('TIMEOUT', 3000)
     field_types = {}
     fields = None
     search_fields = []
+    ordering = None
 
     def __init__(self, server=None, db=None, name=None):
         self.db = LOADER(server, db, self.timeout)
@@ -55,6 +63,8 @@ class Store(object):
         return self.collection.aggregate(fs)
 
     def find(self, *args, **kwargs):
+        if self.ordering and 'sort' not in kwargs:
+            kwargs['sort'] = [django_order_field_to_mongo_sort(s) for s in self.ordering]
         return self.collection.find(*args, **kwargs)
 
     def upsert(self, cond, value, **kwargs):
