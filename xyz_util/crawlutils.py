@@ -272,16 +272,19 @@ class Browser(object):
 
 
 def retry(func, times=3, interval=10):
-    try:
-        return func()
-    except:
-        if times > 1:
-            sleep(interval)
-            print('retrying...')
-            return retry(func, times - 1, interval * 2)
-        import traceback
-        traceback.print_exc()
-        raise Exception('retry failed')
+    ts = times
+    while True:
+        try:
+            return func()
+        except:
+            ts -= 1
+            if ts > 0:
+                sleep(interval)
+                print('retrying...')
+                continue
+            import traceback
+            traceback.print_exc()
+            raise Exception('retry failed')
 
 def readability_summary(url, html_partial=True):
     r = ScrapyResponse(url)

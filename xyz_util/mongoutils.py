@@ -71,7 +71,7 @@ class Store(object):
         d = {'$set': value}
         for k, v in kwargs.items():
             d['$%s' % k] = v
-        self.collection.update_one(cond, d, upsert=True)
+        return self.collection.update_one(cond, d, upsert=True)
 
     def batch_upsert(self, data_list, key='id', preset=lambda a, i: a):
         i = -1
