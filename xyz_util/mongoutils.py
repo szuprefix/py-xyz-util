@@ -25,13 +25,15 @@ def loadMongoDB(server=None, db=None, timeout=3000):
 
 LOADER = import_function(CONF.get('LOADER', 'xyz_util.mongoutils:loadMongoDB'))
 
+
 def regex_contains(s):
     ns = ''
     for a in s:
         if a in '+.?()[]*':
-            ns+='\\'
-        ns+=a
+            ns += '\\'
+        ns += a
     return {'$regex': ns}
+
 
 def django_order_field_to_mongo_sort(s):
     d = 1
@@ -39,6 +41,7 @@ def django_order_field_to_mongo_sort(s):
         d = -1
         s = s[1:]
     return (s, d)
+
 
 class Store(object):
     name = 'test_mongo_store'
@@ -142,6 +145,10 @@ class Store(object):
     def normalize_filter(self, data):
         return normalize_filter_condition(data, self.field_types, self.fields, self.search_fields)
 
+    def create_index(self):
+        for i in self.keys:
+            self.collection.create_index([(i, 1)])
+
 
 def normalize_filter_condition(data, field_types={}, fields=None, search_fields=[]):
     d = {}
@@ -150,36 +157,53 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
         if sv:
             v = {'$regex': sv}
             for fn in search_fields:
-                d = {'$or': [d, {fn:v}]} if d else {fn: v}
+                d = {'$or': [d, {fn: v}]} if d else {fn: v}
+
+    mm = {
+        'exists': lambda v: {'$exists': v not in ['0', 'false']},
+        'isnull': lambda v: {'$ne' if v in ['0', 'false', ''] else '$eq': None},
+        'regex': lambda v: {'$regex': v},
+        'in': lambda v: {'$in': v.split(',')}
+    }
     for a in data.keys():
         if a == 'search':
             continue
         v = data[a]
-        if a.endswith('__exists'):
-            sl = len('__exists')
-            v = {'$exists': v not in ['0', 'false']}
-            a = a[:-sl]
-        elif a.endswith('__isnull'):
-            sl = len('__isnull')
-            v = {'$ne' if v in ['0', 'false', ''] else '$eq': None}
-            a = a[:-sl]
-        elif a.endswith('__regex'):
-            sl = len('__regex')
-            v = {'$regex': v}
-            a = a[:-sl]
-        elif a.endswith('__in'):
-            sl = len('__in')
-            v = {'$in': v.split(',')}
-            a = a[:-sl]
-        if fields and a not in fields:
-            continue
+        for mn, mf in mm.items():
+            ms = '__%s' % mn
+            if a.endswith(ms):
+                sl = len(ms)
+                v = mf(v)
+                a = a[:-sl]
+                break
+        # if a.endswith('__exists'):
+        #     sl = len('__exists')
+        #     v = {'$exists': v not in ['0', 'false']}
+        #     a = a[:-sl]
+        # elif a.endswith('__isnull'):
+        #     sl = len('__isnull')
+        #     v = {'$ne' if v in ['0', 'false', ''] else '$eq': None}
+        #     a = a[:-sl]
+        # elif a.endswith('__regex'):
+        #     sl = len('__regex')
+        #     v = {'$regex': v}
+        #     a = a[:-sl]
+        # elif a.endswith('__in'):
+        #     sl = len('__in')
+        #     v = {'$in': v.split(',')}
+        #     a = a[:-sl]
+        if fields:
+            ps = a.split('__')
+            if ps[0] not in fields:
+                continue
+            a = ".".join(ps)
         d[a] = v
 
     for t, fs in field_types.items():
         for f in fs:
             if f in d and not isinstance(d[f], dict):
                 d[f] = t(d[f])
-    print(d)
+    # print(d)
     return d
 
 
@@ -231,12 +255,15 @@ def model_get_and_patch(view, default={}, field_names=None):
         d = st.upsert({'id': a.id}, pd)
         return Response(d)
 
+
 from rest_framework import viewsets, response
+
+
 class MongoViewSet(viewsets.ViewSet):
     store_name = None
     store_class = None
 
-    def __init__(self,**kwargs):
+    def __init__(self, **kwargs):
         super(MongoViewSet, self).__init__(**kwargs)
         if self.store_class:
             self.store = self.store_class()
@@ -245,11 +272,15 @@ class MongoViewSet(viewsets.ViewSet):
 
     def list(self, request):
         cond = self.store.normalize_filter(request.query_params)
+        randc = request.query_params.get('_random')
+        if randc:
+            rs = self.store.random_find(cond, count=int(randc))
+            return response.Response(dict(results=rs))
         rs = self.store.find(cond)
         return get_paginated_response(self, rs)
 
     def get_object(self):
         return self.store.collection.find_one(dict(id=self.kwargs['pk']), {'_id': 0})
-    
+
     def retrieve(self, request, pk):
         return response.Response(self.get_object())

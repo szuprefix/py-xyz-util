@@ -42,8 +42,10 @@ def hierarchy(s, spliters):
         spl = Splitter(spl)
     a = spl(s)
     tn = TreeNode(a['head'].strip())
-    for b in a['items']:
-        tn.items.append(hierarchy(b, spliters[1:]))
+    for i, b in enumerate(a['items']):
+        sn = hierarchy(b, spliters[1:])
+        sn.prefix = a['splitters'][i]
+        tn.items.append(sn)
     return tn
 
 
@@ -52,6 +54,7 @@ class TreeNode(object):
     def __init__(self, name, items=None):
         self.name = name
         self.items = items or []
+        self.prefix = ''
 
     def __iter__(self):
         for a in self.items:
@@ -62,4 +65,3 @@ class TreeNode(object):
 
     def __str__(self):
         return self.name
-

@@ -103,8 +103,14 @@ def ScrapyResponse(url, **kwargs):
     r = http_get(url, **kwargs)
     hr = HtmlResponse(url=r.url, encoding=encoding or 'utf8', body=r.content)
     setattr(hr, 'r', r)
+    maintain_cookies(r, kwargs.get('cookies'))
     return hr
 
+
+def maintain_cookies(response, cookies):
+    if cookies is None:
+        return
+    cookies.update(response.cookies)
 
 def extract_url(s):
     import re
@@ -277,13 +283,13 @@ def retry(func, times=3, interval=10):
         try:
             return func()
         except:
+            import traceback
             ts -= 1
             if ts > 0:
-                sleep(interval)
+                traceback.print_exc()
                 print('retrying...')
+                sleep(interval)
                 continue
-            import traceback
-            traceback.print_exc()
             raise Exception('retry failed')
 
 def readability_summary(url, html_partial=True):
