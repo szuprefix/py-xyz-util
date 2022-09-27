@@ -273,10 +273,14 @@ class MongoViewSet(viewsets.ViewSet):
     def list(self, request):
         cond = self.store.normalize_filter(request.query_params)
         randc = request.query_params.get('_random')
+        ordering = request.query_params.get('ordering')
+        kwargs={}
+        if ordering:
+            kwargs['sort'] = [django_order_field_to_mongo_sort(ordering)]
         if randc:
             rs = self.store.random_find(cond, count=int(randc))
             return response.Response(dict(results=rs))
-        rs = self.store.find(cond)
+        rs = self.store.find(cond, **kwargs)
         return get_paginated_response(self, rs)
 
     def get_object(self):
