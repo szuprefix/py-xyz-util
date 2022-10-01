@@ -5,7 +5,7 @@ from __future__ import unicode_literals
 from django.conf import settings
 from django.utils.functional import cached_property
 from rest_framework.pagination import PageNumberPagination
-
+from rest_framework import permissions
 from .datautils import access, import_function
 import random
 from django.core.paginator import Paginator
@@ -260,6 +260,7 @@ from rest_framework import viewsets, response
 
 
 class MongoViewSet(viewsets.ViewSet):
+    permission_classes = [permissions.IsAdminUser]
     store_name = None
     store_class = None
 
