@@ -163,7 +163,8 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
         'exists': lambda v: {'$exists': v not in ['0', 'false']},
         'isnull': lambda v: {'$ne' if v in ['0', 'false', ''] else '$eq': None},
         'regex': lambda v: {'$regex': v},
-        'in': lambda v: {'$in': v.split(',')}
+        'in': lambda v: {'$in': v.split(',')},
+        'all': lambda v: {'$all': v.split(',')}
     }
     for a in data.keys():
         if a == 'search':
@@ -272,6 +273,7 @@ class MongoViewSet(viewsets.ViewSet):
             self.store = Store(name=self.store_name)
 
     def list(self, request):
+        # print(request.query_params)
         cond = self.store.normalize_filter(request.query_params)
         randc = request.query_params.get('_random')
         ordering = request.query_params.get('ordering')
@@ -289,3 +291,11 @@ class MongoViewSet(viewsets.ViewSet):
 
     def retrieve(self, request, pk):
         return response.Response(self.get_object())
+
+    def update(self, request, pk, *args, **kargs):
+        instance = self.get_object()
+        self.store.update({'id': pk}, request.data)
+        return response.Response(self.get_object())
+
+    def patch(self, request, pk, *args, **kargs):
+        return self.update(request, pk, *args, **kargs)
