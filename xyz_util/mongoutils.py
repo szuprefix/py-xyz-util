@@ -55,6 +55,8 @@ class Store(object):
     def __init__(self, server=None, db=None, name=None):
         self.db = LOADER(server, db, self.timeout)
         self.collection = getattr(self.db, name or self.name)
+        if name:
+            self.name = name
 
     def random_get(self, *args, **kwargs):
         rs = list(self.random_find(args[0], count=1, **kwargs))
@@ -144,7 +146,8 @@ class Store(object):
         return d
 
     def normalize_filter(self, data):
-        return normalize_filter_condition(data, self.field_types, self.fields, self.search_fields)
+        fs = self.fields or Schema().desc(self.name)
+        return normalize_filter_condition(data, self.field_types, fs, self.search_fields)
 
     def create_index(self):
         for i in self.keys:
