@@ -9,6 +9,7 @@ from rest_framework import permissions
 from .datautils import access, import_function
 import random
 from django.core.paginator import Paginator
+from six import text_type
 
 DEFAULT_DB = {
     'SERVER': 'mongodb://localhost:27017/',
@@ -49,7 +50,7 @@ class Store(object):
     field_types = {}
     fields = None
     search_fields = []
-    ordering = None
+    ordering = ('-id', )
 
     def __init__(self, server=None, db=None, name=None):
         self.db = LOADER(server, db, self.timeout)
@@ -177,22 +178,6 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
                 v = mf(v)
                 a = a[:-sl]
                 break
-        # if a.endswith('__exists'):
-        #     sl = len('__exists')
-        #     v = {'$exists': v not in ['0', 'false']}
-        #     a = a[:-sl]
-        # elif a.endswith('__isnull'):
-        #     sl = len('__isnull')
-        #     v = {'$ne' if v in ['0', 'false', ''] else '$eq': None}
-        #     a = a[:-sl]
-        # elif a.endswith('__regex'):
-        #     sl = len('__regex')
-        #     v = {'$regex': v}
-        #     a = a[:-sl]
-        # elif a.endswith('__in'):
-        #     sl = len('__in')
-        #     v = {'$in': v.split(',')}
-        #     a = a[:-sl]
         if fields:
             ps = a.split('__')
             if ps[0] not in fields:
@@ -232,7 +217,8 @@ def drop_id_field(c):
 def get_paginated_response(view, query):
     pager = MongoPageNumberPagination()
     ds = pager.paginate_queryset(query, view.request, view=view)
-    return pager.get_paginated_response(list(drop_id_field(ds)))
+    rs = list(ds)
+    return pager.get_paginated_response(rs)
 
 
 def model_get_and_patch(view, default={}, field_names=None):
@@ -283,7 +269,7 @@ class MongoViewSet(viewsets.ViewSet):
         if randc:
             rs = self.store.random_find(cond, count=int(randc))
             return response.Response(dict(results=rs))
-        rs = self.store.find(cond, **kwargs)
+        rs = self.store.find(cond, {'_id':0}, **kwargs)
         return get_paginated_response(self, rs)
 
     def get_object(self):
@@ -299,3 +285,41 @@ class MongoViewSet(viewsets.ViewSet):
 
     def patch(self, request, pk, *args, **kargs):
         return self.update(request, pk, *args, **kargs)
+
+def json_schema(d, prefix=''):
+    tm = {
+        int: 'integer',
+        float: 'number',
+        bool: 'boolean',
+        list: 'array',
+        text_type: 'string',
+        type(None): 'null',
+        dict: 'object'
+    }
+    r = {}
+    for k, v in d.items():
+        t = tm[type(v)]
+        fn = '%s%s' % (prefix, k)
+        r[fn] = t
+        if t == 'object':
+            r.update(json_schema(v, prefix='%s.' % fn))
+    return r
+
+
+
+class Schema(Store):
+    name = 'XYZ_STORE_SCHEMA'
+
+    def guess(self, name, *args, **kwargs):
+        st =Store(name=name)
+        rs = {}
+        for d in st.random_find(*args, **kwargs):
+            rs.update(json_schema(d))
+        self.upsert({'name': name}, {'guess': rs})
+        return rs
+
+    def desc(self, name, *args, **kwargs):
+        d = self.collection.find_one({'name': 'name'}, {'_id':0})
+        if not d:
+            return self.guess(name, *args, **kwargs)
+        return d
