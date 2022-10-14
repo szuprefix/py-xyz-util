@@ -7,7 +7,6 @@ from django.utils.functional import cached_property
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import permissions
 from .datautils import access, import_function
-import random
 from django.core.paginator import Paginator
 from six import text_type
 
@@ -50,7 +49,7 @@ class Store(object):
     field_types = {}
     fields = None
     search_fields = []
-    ordering = ('-id', )
+    ordering = ('-id',)
 
     def __init__(self, server=None, db=None, name=None):
         self.db = LOADER(server, db, self.timeout)
@@ -246,7 +245,35 @@ def model_get_and_patch(view, default={}, field_names=None):
         return Response(d)
 
 
-from rest_framework import viewsets, response
+from rest_framework import viewsets, response, serializers, fields
+
+
+class MongoSerializer(serializers.ModelSerializer):
+
+    def get_fields(self):
+        assert hasattr(self, 'Meta'), (
+            'Class {serializer_class} missing "Meta" attribute'.format(
+                serializer_class=self.__class__.__name__
+            )
+        )
+        assert hasattr(self.Meta, 'store'), (
+            'Class {serializer_class} missing "Meta.store" attribute'.format(
+                serializer_class=self.__class__.__name__
+            )
+        )
+        schema = Schema()
+        store = self.Meta.store
+        rs = {}
+        fm = {'string': fields.CharField,
+              'integer': fields.IntegerField,
+              'number': fields.FloatField,
+              'array': fields.ListField,
+              'object': fields.JSONField
+              }
+        for fn, ft in schema.desc(store.name).items():
+            field = fm[ft]()
+            rs[fn] = field
+        return rs
 
 
 class MongoViewSet(viewsets.ViewSet):
@@ -261,18 +288,23 @@ class MongoViewSet(viewsets.ViewSet):
         elif self.store_name:
             self.store = Store(name=self.store_name)
 
+    def options(self, request, *args, **kwargs):
+        print(self.metadata_class)
+        return super(MongoViewSet, self).options(request, *args, **kwargs)
+        return response.Response({})
+
     def list(self, request):
         # print(request.query_params)
         cond = self.store.normalize_filter(request.query_params)
         randc = request.query_params.get('_random')
         ordering = request.query_params.get('ordering')
-        kwargs={}
+        kwargs = {}
         if ordering:
             kwargs['sort'] = [django_order_field_to_mongo_sort(ordering)]
         if randc:
             rs = self.store.random_find(cond, count=int(randc))
             return response.Response(dict(results=rs))
-        rs = self.store.find(cond, {'_id':0}, **kwargs)
+        rs = self.store.find(cond, {'_id': 0}, **kwargs)
         return get_paginated_response(self, rs)
 
     def get_object(self):
@@ -288,6 +320,7 @@ class MongoViewSet(viewsets.ViewSet):
 
     def patch(self, request, pk, *args, **kargs):
         return self.update(request, pk, *args, **kargs)
+
 
 def json_schema(d, prefix=''):
     tm = {
@@ -309,12 +342,11 @@ def json_schema(d, prefix=''):
     return r
 
 
-
 class Schema(Store):
     name = 'XYZ_STORE_SCHEMA'
 
     def guess(self, name, *args, **kwargs):
-        st =Store(name=name)
+        st = Store(name=name)
         rs = {}
         for d in st.random_find(*args, **kwargs):
             rs.update(json_schema(d))
@@ -322,7 +354,7 @@ class Schema(Store):
         return rs
 
     def desc(self, name, *args, **kwargs):
-        d = self.collection.find_one({'name': 'name'}, {'_id':0})
+        d = self.collection.find_one({'name': 'name'}, {'_id': 0})
         if not d:
             return self.guess(name, *args, **kwargs)
         return d
