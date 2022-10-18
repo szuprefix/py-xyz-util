@@ -358,3 +358,36 @@ class Schema(Store):
         if not d:
             return self.guess(name, *args, **kwargs)
         return d
+
+
+from rest_framework.metadata import SimpleMetadata
+class RestMetadata(SimpleMetadata):
+    def determine_actions(self, request, view):
+        actions = super(RestMetadata, self).determine_actions(request, view)
+        view.request = clone_request(request, 'GET')
+        try:
+            # Test global permissions
+            if hasattr(view, 'check_permissions'):
+                view.check_permissions(view.request)
+        except (exceptions.APIException, PermissionDenied, Http404):
+            pass
+        else:
+
+            search_fields = getattr(view, 'search_fields', [])
+            cf = lambda f: f[0] in ['^', '@', '='] and f[1:] or f
+            actions['SEARCH'] = search = {}
+            search['search_fields'] = [get_related_field_verbose_name(view.queryset.model, cf(f)) for f in
+                                       search_fields]
+            ffs = access(view, 'filter_class._meta.fields') or getattr(view, 'filter_fields', [])
+            if isinstance(ffs, dict):
+                search['filter_fields'] = [{'name': k, 'lookups': v} for k, v in ffs.items()]
+            else:
+                search['filter_fields'] = [{'name': a, 'lookups': 'exact'} for a in ffs]
+            search['ordering_fields'] = getattr(view, 'ordering_fields', [])
+            serializer = view.get_serializer()
+            actions['LIST'] = self.get_list_info(serializer)
+        finally:
+            view.request = request
+        return actions
+
+
