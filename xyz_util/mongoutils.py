@@ -5,7 +5,7 @@ from __future__ import unicode_literals
 from django.conf import settings
 from django.utils.functional import cached_property
 from rest_framework.pagination import PageNumberPagination
-from rest_framework import permissions
+from rest_framework import permissions, exceptions
 from .datautils import access, import_function
 from django.core.paginator import Paginator
 from six import text_type
@@ -129,6 +129,18 @@ class Store(object):
         rs = self.collection.aggregate(ps)
         if output == 'dict':
             rs = dict([(a['_id'], a['count']) for a in rs])
+        return rs
+
+    def group_by(self, field, aggregate={'count': {'$sum': 1}}, filter=None, output='array', unwind=False):
+        ps = []
+        if filter:
+            ps.append({'$match': filter})
+        if unwind:
+            ps.append({'$unwind': '$%s' % field})
+        d = {'_id': '$%s' % field}
+        d.update(aggregate)
+        ps.append({'$group': d})
+        rs = self.collection.aggregate(ps)
         return rs
 
     def clean_data(self, data):
@@ -281,21 +293,26 @@ class MongoViewSet(viewsets.ViewSet):
     store_name = None
     store_class = None
 
-    def __init__(self, **kwargs):
-        super(MongoViewSet, self).__init__(**kwargs)
+    def dispatch(self, request, *args, **kwargs): 
+        self.store = self.get_store()
+        return super(MongoViewSet, self).dispatch(request,  *args, **kwargs)
+
+    def get_store(self):
         if self.store_class:
-            self.store = self.store_class()
+            return self.store_class()
         elif self.store_name:
-            self.store = Store(name=self.store_name)
+            return Store(name=self.store_name)
+        raise exceptions.NotFound()
 
     def options(self, request, *args, **kwargs):
-        print(self.metadata_class)
+        # print(self.metadata_class)
         return super(MongoViewSet, self).options(request, *args, **kwargs)
         return response.Response({})
 
     def list(self, request):
         # print(request.query_params)
         cond = self.store.normalize_filter(request.query_params)
+        print(cond)
         randc = request.query_params.get('_random')
         ordering = request.query_params.get('ordering')
         kwargs = {}
