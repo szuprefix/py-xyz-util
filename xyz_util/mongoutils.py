@@ -9,10 +9,12 @@ from rest_framework import permissions, exceptions
 from .datautils import access, import_function
 from django.core.paginator import Paginator
 from six import text_type
+from bson import json_util
+from bson.objectid import ObjectId
 
 DEFAULT_DB = {
     'SERVER': 'mongodb://localhost:27017/',
-    'DB': access(settings, 'DATABASES.default.NAME')
+    'DB': access(settings, 'DATABASES.default.NAME').split('/')[-1].split('.')[0]
 }
 CONF = getattr(settings, 'MONGODB', DEFAULT_DB)
 
@@ -61,7 +63,7 @@ class Store(object):
         rs = list(self.random_find(args[0], count=1, **kwargs))
         return rs[0] if rs else None
 
-    def random_find(self, cond={}, count=10, fields={'_id': 0}):
+    def random_find(self, cond={}, count=10, fields=None):
         fs = [{'$match': cond}, {'$sample': {'size': count}}]
         if fields:
             fs.append({'$project': fields})
@@ -81,7 +83,10 @@ class Store(object):
     def batch_upsert(self, data_list, key='id', preset=lambda a, i: a):
         i = -1
         for i, d in enumerate(data_list):
-            preset(d, i)
+            if isinstance(d, tuple):
+                d = d[-1]
+            d = preset(d, i) or d
+            print(d[key])
             self.upsert({key: d[key]}, d)
         return i + 1
 
@@ -232,7 +237,7 @@ def get_paginated_response(view, query):
     pager = MongoPageNumberPagination()
     ds = pager.paginate_queryset(query, view.request, view=view)
     rs = list(ds)
-    return pager.get_paginated_response(rs)
+    return pager.get_paginated_response(json_util._json_convert(rs))
 
 
 def model_get_and_patch(view, default={}, field_names=None):
@@ -306,42 +311,57 @@ class MongoViewSet(viewsets.ViewSet):
 
     def options(self, request, *args, **kwargs):
         # print(self.metadata_class)
-        return super(MongoViewSet, self).options(request, *args, **kwargs)
-        return response.Response({})
+        # return super(MongoViewSet, self).options(request, *args, **kwargs)
+        sc = Schema().desc(self.get_store().name)
+        return response.Response(sc)
 
     def list(self, request):
         # print(request.query_params)
-        cond = self.store.normalize_filter(request.query_params)
-        print(cond)
-        randc = request.query_params.get('_random')
-        ordering = request.query_params.get('ordering')
+        qps = request.query_params
+        cond = self.store.normalize_filter(qps)
+        # print(cond)
+        randc = qps.get('_random')
+        ordering = qps.get('ordering')
         kwargs = {}
         if ordering:
             kwargs['sort'] = [django_order_field_to_mongo_sort(ordering)]
         if randc:
             rs = self.store.random_find(cond, count=int(randc))
-            return response.Response(dict(results=rs))
-        rs = self.store.find(cond, {'_id': 0}, **kwargs)
+            return response.Response(dict(results=json_util._json_convert(rs)))
+        rs = self.store.find(cond, None, **kwargs)
         return get_paginated_response(self, rs)
 
-    def get_object(self):
-        return self.store.collection.find_one(dict(id=self.kwargs['pk']), {'_id': 0})
+    def get_object(self, id=None):
+        _id = id if id else self.kwargs['pk']
+        cond = {'_id': ObjectId(_id)}
+        return json_util._json_convert(self.store.collection.find_one(cond, None))
 
     def retrieve(self, request, pk):
         return response.Response(self.get_object())
 
+    def get_serialized_data(self):
+        return self.request.data
+
     def update(self, request, pk, *args, **kargs):
         instance = self.get_object()
-        self.store.update({'id': pk}, request.data)
+        data = self.get_serialized_data()
+        self.store.update({'_id': ObjectId(pk)}, data)
         return response.Response(self.get_object())
+
+    def create(self, request, *args, **kargs):
+        data = self.get_serialized_data()
+        r = self.store.collection.insert_one(data)
+        return response.Response(self.get_object(r.inserted_id))
 
     def patch(self, request, pk, *args, **kargs):
         return self.update(request, pk, *args, **kargs)
 
 
 def json_schema(d, prefix=''):
+    import bson
     tm = {
         int: 'integer',
+        bson.int64.Int64: 'integer',
         float: 'number',
         bool: 'boolean',
         list: 'array',
@@ -371,9 +391,10 @@ class Schema(Store):
         return rs
 
     def desc(self, name, *args, **kwargs):
-        d = self.collection.find_one({'name': 'name'}, {'_id': 0})
+        d = self.collection.find_one({'name': name}, {'_id': 0})
         if not d:
-            return self.guess(name, *args, **kwargs)
+            self.guess(name, *args, **kwargs)
+            d = self.collection.find_one({'name': name}, {'_id': 0})
         return d
 
 

@@ -172,6 +172,11 @@ def str2dict(s, line_spliter='\n', key_spliter=':'):
     return d
 
 
+def str2list(s, line_spliter='\n', field_spliter='\t'):
+    for l in s.split(line_spliter):
+        yield l.split(field_spliter)
+
+
 def dict2str(d, line_spliter='\n', key_spliter=':'):
     return line_spliter.join(["%s%s%s" % (k, key_spliter, v) for k, v in d.items()])
 
@@ -258,6 +263,7 @@ def clear_dict_keys(d, *args):
         if a in d:
             d.pop(a)
 
+
 def gen_sub_dict(d, prefix=None):
     nd = {}
     p = len(prefix)
@@ -266,6 +272,7 @@ def gen_sub_dict(d, prefix=None):
             fn = k[p:].lower()
             nd[fn] = v
     return nd
+
 
 common_used_numerals = {'零': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9,
                         '十': 10, '百': 100, '千': 1000, '万': 10000, '亿': 100000000}
@@ -286,10 +293,11 @@ def cn2digits(uchars_cn):
             return lp * common_used_numerals.get(i, 0) + rp
     return common_used_numerals.get(s[-1], 0)
 
+
 def digits2cn(number):
     _MAPPING = (
-    '零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二', '十三', '十四', '十五', '十六', '十七',
-    '十八', '十九')
+        '零', '一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二', '十三', '十四', '十五', '十六', '十七',
+        '十八', '十九')
     _P0 = ('', '十', '百', '千',)
     _S4 = 10 ** 4
     _PP = ('', '万', '亿')
@@ -313,11 +321,14 @@ def digits2cn(number):
                     if idx < c - 1 and lst[idx + 1] == 0:
                         result += '零'
             return result[::-1]
-    if number<_S4:
+
+    if number < _S4:
         return _to_chinese4(number)
-    if number<_S4**2:
-        return '%s万%s' % (_to_chinese4(number//_S4), _to_chinese4(number % _S4))
-    return '%s亿%s万%s' % (_to_chinese4(number//_S4//_S4), _to_chinese4(number//_S4 % _S4), _to_chinese4(number % _S4))
+    if number < _S4 ** 2:
+        return '%s万%s' % (_to_chinese4(number // _S4), _to_chinese4(number % _S4))
+    return '%s亿%s万%s' % (
+        _to_chinese4(number // _S4 // _S4), _to_chinese4(number // _S4 % _S4), _to_chinese4(number % _S4))
+
 
 def auto_code(n):
     from xpinyin import Pinyin
