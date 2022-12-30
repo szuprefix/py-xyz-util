@@ -162,7 +162,11 @@ class Store(object):
         return d
 
     def normalize_filter(self, data):
-        fs = self.fields or Schema().desc(self.name)
+        fs = self.fields
+        if not fs:
+            sc = Schema().desc(self.name)
+            fs = sc.get('guess')
+        # print(fs)
         return normalize_filter_condition(data, self.field_types, fs, self.search_fields)
 
     def create_index(self):
@@ -362,6 +366,7 @@ def json_schema(d, prefix=''):
     tm = {
         int: 'integer',
         bson.int64.Int64: 'integer',
+        bson.objectid.ObjectId: 'string',
         float: 'number',
         bool: 'boolean',
         list: 'array',
