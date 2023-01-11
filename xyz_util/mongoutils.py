@@ -80,14 +80,14 @@ class Store(object):
             d['$%s' % k] = v
         return self.collection.update_one(cond, d, upsert=True)
 
-    def batch_upsert(self, data_list, key='id', preset=lambda a, i: a):
+    def batch_upsert(self, data_list, key='id', preset=lambda a, i: a, **kwargs):
         i = -1
         for i, d in enumerate(data_list):
             if isinstance(d, tuple):
                 d = d[-1]
             d = preset(d, i) or d
             print(d[key])
-            self.upsert({key: d[key]}, d)
+            self.upsert({key: d[key]}, d, **kwargs)
         return i + 1
 
     def update(self, cond, value, **kwargs):
@@ -349,6 +349,7 @@ class MongoViewSet(viewsets.ViewSet):
     def update(self, request, pk, *args, **kargs):
         instance = self.get_object()
         data = self.get_serialized_data()
+        # print(data)
         self.store.update({'_id': ObjectId(pk)}, data)
         return response.Response(self.get_object())
 
