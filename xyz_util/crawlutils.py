@@ -297,3 +297,14 @@ def readability_summary(url, html_partial=True):
     from readability import Document
     doc = Document(r.text)
     return doc.summary(html_partial=html_partial)
+
+
+def html2text(text):
+    return re.sub('<.*?>', '', text, flags=re.M | re.S) \
+        .replace('&quot;', '"') \
+        .replace('&copy;', '©') \
+        .replace('&lt;', '<') \
+        .replace('&gt;', '>') \
+        .replace('&amp;', '&') \
+        .replace('&#39;', "'") \
+        .replace('&apos;', "'")
