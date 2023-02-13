@@ -552,3 +552,13 @@ def trim_by_length(s, ml, charset='utf8'):
         if l == ml:
             return rs
     return rs
+
+def reorder(dl, new_orders):
+    for a in new_orders:
+        if a not in dl:
+            continue
+        yield a
+    for a in dl:
+        if a in new_orders:
+            continue
+        yield a
