@@ -6,7 +6,7 @@ import subprocess
 FFMPEG = "ffmpeg"
 
 
-class Transformr(object):
+class Transformer(object):
 
     def __init__(self, cmd='ffmpeg'):
         self.cmd = cmd
