@@ -398,7 +398,7 @@ class Schema(Store):
 
     def desc(self, name, *args, **kwargs):
         d = self.collection.find_one({'name': name}, {'_id': 0})
-        if not d:
+        if not d or not d.get('guess'):
             self.guess(name, *args, **kwargs)
             d = self.collection.find_one({'name': name}, {'_id': 0})
         return d
