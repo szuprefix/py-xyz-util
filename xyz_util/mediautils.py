@@ -11,8 +11,8 @@ class Transformr(object):
     def __init__(self, cmd='ffmpeg'):
         self.cmd = cmd
 
-    def execute(self, **args):
-        return subprocess.run([self.cmd] + args)
+    def execute(self, *args):
+        return subprocess.run([self.cmd, '-y'] + list(args))
 
     def save(self, src_path, dest_path):
         return self.execute('-i', src_path, dest_path)
