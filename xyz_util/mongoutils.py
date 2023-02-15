@@ -319,6 +319,9 @@ class MongoViewSet(viewsets.ViewSet):
         sc = Schema().desc(self.get_store().name)
         return response.Response(sc)
 
+    def get_serialize_fields(self):
+        return None
+
     def list(self, request):
         # print(request.query_params)
         qps = request.query_params
@@ -330,9 +333,9 @@ class MongoViewSet(viewsets.ViewSet):
         if ordering:
             kwargs['sort'] = [django_order_field_to_mongo_sort(ordering)]
         if randc:
-            rs = self.store.random_find(cond, count=int(randc))
+            rs = self.store.random_find(cond, count=int(randc), fields=self.get_serialize_fields())
             return response.Response(dict(results=json_util._json_convert(rs)))
-        rs = self.store.find(cond, None, **kwargs)
+        rs = self.store.find(cond, self.get_serialize_fields(), **kwargs)
         return get_paginated_response(self, rs)
 
     def get_object(self, id=None):

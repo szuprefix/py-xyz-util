@@ -26,6 +26,6 @@ class Transformer(object):
     def video_set_audio(self, video_path, audio_path, save_path):
         return self.execute('-i', video_path, '-i', audio_path, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', save_path)
 
-    def images_to_video(images_path, video_path, fps=5):
-        return subprocess.run([FFMPEG, '-y', '-r', f'{fps}', '-i', images_path, '-pix_fmt', 'yuv420p', '-vf',
-                               "pad=ceil(iw/2)*2:ceil(ih/2)*2", video_path])
+    def images_to_video(self, images_path, video_path, fps=5):
+        return self.execute('-r', f'{fps}', '-i', images_path, '-pix_fmt', 'yuv420p', '-vf',
+                               "pad=ceil(iw/2)*2:ceil(ih/2)*2", video_path)
