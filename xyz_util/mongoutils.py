@@ -9,7 +9,7 @@ from rest_framework import permissions, exceptions
 from .datautils import access, import_function
 from django.core.paginator import Paginator
 from six import text_type
-from bson import json_util
+from bson import json_util, ObjectId
 from bson.objectid import ObjectId
 
 DEFAULT_DB = {
@@ -62,6 +62,18 @@ class Store(object):
     def random_get(self, *args, **kwargs):
         rs = list(self.random_find(args[0], count=1, **kwargs))
         return rs[0] if rs else None
+
+    def get(self, cond):
+        if isinstance(cond, text_type):
+            cond = {'_id': ObjectId(cond)}
+        return self.collection.find_one(cond)
+
+    def get_or_create(self, cond, defaults={}):
+        a = self.get(cond)
+        if not a:
+            rs = self.collection.insert_one(dict(**cond, **defaults))
+            a = self.get({'_id': rs.inserted_id})
+        return a
 
     def random_find(self, cond={}, count=10, fields=None):
         fs = [{'$match': cond}, {'$sample': {'size': count}}]
@@ -237,10 +249,10 @@ def drop_id_field(c):
         yield a
 
 
-def get_paginated_response(view, query):
+def get_paginated_response(view, query, wrap=lambda a: a):
     pager = MongoPageNumberPagination()
     ds = pager.paginate_queryset(query, view.request, view=view)
-    rs = list(ds)
+    rs = [wrap(a) for a in ds]
     return pager.get_paginated_response(json_util._json_convert(rs))
 
 
@@ -302,16 +314,22 @@ class MongoViewSet(viewsets.ViewSet):
     store_name = None
     store_class = None
 
-    def dispatch(self, request, *args, **kwargs): 
+    def dispatch(self, request, *args, **kwargs):
         self.store = self.get_store()
-        return super(MongoViewSet, self).dispatch(request,  *args, **kwargs)
+        return super(MongoViewSet, self).dispatch(request, *args, **kwargs)
 
-    def get_store(self):
+    def get_store(self, name=None):
+        if name:
+            return Store(name=name)
         if self.store_class:
             return self.store_class()
         elif self.store_name:
             return Store(name=self.store_name)
         raise exceptions.NotFound()
+
+    def get_foreign_key(self, store_name, id):
+        st = self.get_store(store_name)
+        return st.collection.get(id=id)
 
     def options(self, request, *args, **kwargs):
         # print(self.metadata_class)
@@ -336,12 +354,23 @@ class MongoViewSet(viewsets.ViewSet):
             rs = self.store.random_find(cond, count=int(randc), fields=self.get_serialize_fields())
             return response.Response(dict(results=json_util._json_convert(rs)))
         rs = self.store.find(cond, self.get_serialize_fields(), **kwargs)
-        return get_paginated_response(self, rs)
+        return get_paginated_response(self, rs, wrap=self.eval_foreign_keys)
+
+    def eval_foreign_keys(self, d):
+        fks = getattr(self, 'foreign_keys', None)
+        if not fks:
+            return d
+        for kn, sn in fks.items():
+            id = d[kn]
+            if isinstance(id, dict):
+                id = id['$oid']
+            d[kn] = self.get_store(sn).get(id)
+        return d
 
     def get_object(self, id=None):
         _id = id if id else self.kwargs['pk']
         cond = {'_id': ObjectId(_id)}
-        return json_util._json_convert(self.store.collection.find_one(cond, None))
+        return json_util._json_convert(self.eval_foreign_keys(self.store.collection.find_one(cond, None)))
 
     def retrieve(self, request, pk):
         return response.Response(self.get_object())
@@ -408,6 +437,8 @@ class Schema(Store):
 
 
 from rest_framework.metadata import SimpleMetadata
+
+
 class RestMetadata(SimpleMetadata):
     def determine_actions(self, request, view):
         actions = super(RestMetadata, self).determine_actions(request, view)
@@ -436,5 +467,3 @@ class RestMetadata(SimpleMetadata):
         finally:
             view.request = request
         return actions
-
-
