@@ -340,11 +340,15 @@ class MongoViewSet(viewsets.ViewSet):
     def get_serialize_fields(self):
         return None
 
+    def filter_query(self, cond):
+        return cond
+
     def list(self, request):
         # print(request.query_params)
         qps = request.query_params
         cond = self.store.normalize_filter(qps)
         # print(cond)
+        cond = self.filter_query(cond)
         randc = qps.get('_random')
         ordering = qps.get('ordering')
         kwargs = {}
