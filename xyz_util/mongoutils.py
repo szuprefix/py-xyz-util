@@ -189,6 +189,17 @@ class Store(object):
         for i in self.keys:
             self.collection.create_index([(i, 1)])
 
+    def eval_foreign_keys(self, d, foreign_keys=None):
+        fks = foreign_keys or getattr(self, 'foreign_keys', None)
+        if not fks:
+            return d
+        for kn, sn in fks.items():
+            id = d[kn]
+            if isinstance(id, dict):
+                id = id['$oid']
+            d[kn] = Store(name=sn).get(id)
+        return d
+
 
 def normalize_filter_condition(data, field_types={}, fields=None, search_fields=[]):
     d = {}
@@ -368,14 +379,8 @@ class MongoViewSet(viewsets.ViewSet):
 
     def eval_foreign_keys(self, d):
         fks = getattr(self, 'foreign_keys', None)
-        if not fks:
-            return d
-        for kn, sn in fks.items():
-            id = d[kn]
-            if isinstance(id, dict):
-                id = id['$oid']
-            d[kn] = self.get_store(sn).get(id)
-        return d
+        return self.store.eval_foreign_keys(d, foreign_keys=fks)
+
 
     def get_object(self, id=None):
         _id = id if id else self.kwargs['pk']
