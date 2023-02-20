@@ -196,7 +196,10 @@ class Store(object):
         for kn, sn in fks.items():
             id = d[kn]
             if isinstance(id, dict):
-                id = id['$oid']
+                if '$oid' in id:
+                    id = id['$oid']
+                elif '_id' in id:
+                    id = id['_id']['$oid']
             d[kn] = Store(name=sn).get(id)
         return d
 
@@ -399,7 +402,7 @@ class MongoViewSet(viewsets.ViewSet):
         # print(data)
         self.store.update({'_id': ObjectId(pk)}, data)
         new_instance = self.get_object()
-        mongo_posted.send_robust(sender=self, instance=instance, update=data, created=False)
+        mongo_posted.send_robust(sender=type(self), instance=instance, update=data, created=False)
         return response.Response(new_instance)
 
     def create(self, request, *args, **kargs):
