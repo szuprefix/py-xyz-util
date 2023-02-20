@@ -11,6 +11,7 @@ from django.core.paginator import Paginator
 from six import text_type
 from bson import json_util, ObjectId
 from bson.objectid import ObjectId
+from django.dispatch import Signal
 
 DEFAULT_DB = {
     'SERVER': 'mongodb://localhost:27017/',
@@ -71,7 +72,10 @@ class Store(object):
     def get_or_create(self, cond, defaults={}):
         a = self.get(cond)
         if not a:
-            rs = self.collection.insert_one(dict(**cond, **defaults))
+            d = {}
+            d.update(cond)
+            d.update(defaults)
+            rs = self.collection.insert_one(d)
             a = self.get({'_id': rs.inserted_id})
         return a
 
@@ -309,6 +313,8 @@ class MongoSerializer(serializers.ModelSerializer):
         return rs
 
 
+mongo_posted = Signal(providing_args=['table', 'instance', 'created', 'update'])
+
 class MongoViewSet(viewsets.ViewSet):
     permission_classes = [permissions.IsAdminUser]
     store_name = None
@@ -387,7 +393,9 @@ class MongoViewSet(viewsets.ViewSet):
         data = self.get_serialized_data()
         # print(data)
         self.store.update({'_id': ObjectId(pk)}, data)
-        return response.Response(self.get_object())
+        new_instance = self.get_object()
+        mongo_posted.send_robust(sender=self, instance=instance, update=data, created=False)
+        return response.Response(new_instance)
 
     def create(self, request, *args, **kargs):
         data = self.get_serialized_data()
