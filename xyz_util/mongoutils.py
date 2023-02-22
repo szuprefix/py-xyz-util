@@ -402,7 +402,7 @@ class MongoViewSet(viewsets.ViewSet):
         # print(data)
         self.store.update({'_id': ObjectId(pk)}, data)
         new_instance = self.get_object()
-        mongo_posted.send_robust(sender=type(self), instance=instance, update=data, created=False)
+        mongo_posted.send_robust(sender=type(self), instance=new_instance, update=data, created=False)
         return response.Response(new_instance)
 
     def create(self, request, *args, **kargs):
