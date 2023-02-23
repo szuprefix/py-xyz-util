@@ -403,7 +403,7 @@ class MongoViewSet(viewsets.ViewSet):
         self.store.update({'_id': ObjectId(pk)}, data)
         new_instance = self.get_object()
         mongo_posted.send_robust(sender=type(self), instance=new_instance, update=data, created=False)
-        return response.Response(new_instance)
+        return response.Response(json_util._json_convert(new_instance))
 
     def create(self, request, *args, **kargs):
         data = self.get_serialized_data()
