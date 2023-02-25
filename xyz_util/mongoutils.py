@@ -179,11 +179,16 @@ class Store(object):
 
     def normalize_filter(self, data):
         fs = self.fields
+        fts = {}
         if not fs:
             sc = Schema().desc(self.name)
             fs = sc.get('guess')
-        # print(fs)
-        return normalize_filter_condition(data, self.field_types, fs, self.search_fields)
+            fts = all_fields_type_func(fs)
+        if self.field_types:
+            for ft, fns in self.field_types.items():
+                for fn in fns:
+                    fts[fn] = ft
+        return normalize_filter_condition(data, fts, fs, self.search_fields)
 
     def create_index(self):
         for i in self.keys:
@@ -232,20 +237,24 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
             ms = '__%s' % mn
             if a.endswith(ms):
                 sl = len(ms)
-                v = mf(v)
                 a = a[:-sl]
+                format_func = field_types.get(a)
+                if format_func:
+                    v = format_func(v)
+                v = mf(v)
                 break
         if fields:
             ps = a.split('__')
             if ps[0] not in fields:
                 continue
             a = ".".join(ps)
-        d[a] = v
+        format_func = field_types.get(a)
+        d[a] = format_func(v) if not isinstance(v, dict) and format_func else v
 
-    for t, fs in field_types.items():
-        for f in fs:
-            if f in d and not isinstance(d[f], dict):
-                d[f] = t(d[f])
+    # for t, fs in field_types.items():
+    #     for f in fs:
+    #         if f in d and not isinstance(d[f], dict):
+    #             d[f] = t(d[f])
     # print(d)
     return d
 
@@ -416,6 +425,18 @@ class MongoViewSet(viewsets.ViewSet):
 
     def patch(self, request, pk, *args, **kargs):
         return self.update(request, pk, *args, **kargs)
+
+
+def filed_type_func(f):
+    import json
+    return {
+        'integer': int,
+        'number': float,
+        'object': json.loads
+    }.get(f, text_type)
+
+def all_fields_type_func(fs):
+    return dict([(fn, filed_type_func(ft)) for fn, ft in fs.items()])
 
 
 def json_schema(d, prefix=''):
