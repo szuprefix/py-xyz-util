@@ -218,7 +218,11 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
         'isnull': lambda v: {'$ne' if v in ['0', 'false', ''] else '$eq': None},
         'regex': lambda v: {'$regex': v},
         'in': lambda v: {'$in': v.split(',')},
-        'all': lambda v: {'$all': v.split(',')}
+        'all': lambda v: {'$all': v.split(',')},
+        'gt': lambda v: {'$gt': v},
+        'lt': lambda v: {'$lt': v},
+        'gte': lambda v: {'$gte': v},
+        'lt': lambda v: {'$lte': v},
     }
     for a in data.keys():
         if a == 'search':
