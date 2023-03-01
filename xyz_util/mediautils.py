@@ -12,7 +12,10 @@ class Transformer(object):
         self.cmd = cmd
 
     def execute(self, *args, **kwargs):
-        return subprocess.run([self.cmd, '-y'] + list(args), **kwargs)
+        r = subprocess.run([self.cmd, '-y'] + list(args), **kwargs)
+        if r.returncode:
+            raise Exception(r.stderr)
+        return r.stdout
 
     def probe(self, *args, **kwargs):
         return subprocess.run([self.cmd.replace('ffmpeg', 'ffprobe')] + list(args), **kwargs)
