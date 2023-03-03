@@ -46,6 +46,13 @@ def django_order_field_to_mongo_sort(s):
     return (s, d)
 
 
+def mongo_id_value(id):
+    if isinstance(id, ObjectId):
+        return text_type(id)
+    if isinstance(id, dict) and '$oid' in id:
+        return id['$oid']
+
+
 class Store(object):
     name = 'test_mongo_store'
     timeout = CONF.get('TIMEOUT', 3000)
@@ -199,16 +206,12 @@ class Store(object):
         if not fks:
             return d
         for kn, sn in fks.items():
-            id = d[kn]
-            if isinstance(id, dict):
-                if '$oid' in id:
-                    id = id['$oid']
-                else:
-                    continue
-                # elif '_id' in id:
-                #     id = id['_id']['$oid']
+            id = mongo_id_value(d[kn])
+            if not id:
+                continue
             d[kn] = Store(name=sn).get(id)
         return d
+
 
 
 def normalize_filter_condition(data, field_types={}, fields=None, search_fields=[]):
