@@ -12,7 +12,7 @@ class Transformer(object):
         self.cmd = cmd
 
     def execute(self, *args, **kwargs):
-        r = subprocess.run([self.cmd, '-y'] + list(args), **kwargs)
+        r = subprocess.run([self.cmd, '-y', '-loglevel', 'error'] + list(args), **kwargs)
         if r.returncode:
             raise Exception(r.stderr)
         return r.stdout

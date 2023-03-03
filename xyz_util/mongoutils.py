@@ -200,11 +200,10 @@ class Store(object):
             return d
         for kn, sn in fks.items():
             id = d[kn]
-            if isinstance(id, dict):
-                if '$oid' in id:
-                    id = id['$oid']
-                elif '_id' in id:
-                    id = id['_id']['$oid']
+            if isinstance(id, dict) and '$oid' in id:
+                id = id['$oid']
+                # elif '_id' in id:
+                #     id = id['_id']['$oid']
             d[kn] = Store(name=sn).get(id)
         return d
 
@@ -407,7 +406,9 @@ class MongoViewSet(viewsets.ViewSet):
         return response.Response(self.get_object())
 
     def get_serialized_data(self):
-        return self.request.data
+        d = {}
+        d.update(self.request.data)
+        return d
 
     def update(self, request, pk, *args, **kargs):
         instance = self.get_object()
