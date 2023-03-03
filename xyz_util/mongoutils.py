@@ -200,8 +200,11 @@ class Store(object):
             return d
         for kn, sn in fks.items():
             id = d[kn]
-            if isinstance(id, dict) and '$oid' in id:
-                id = id['$oid']
+            if isinstance(id, dict):
+                if '$oid' in id:
+                    id = id['$oid']
+                else:
+                    continue
                 # elif '_id' in id:
                 #     id = id['_id']['$oid']
             d[kn] = Store(name=sn).get(id)
