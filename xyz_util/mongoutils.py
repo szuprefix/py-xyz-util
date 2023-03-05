@@ -254,7 +254,11 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
                 continue
             a = ".".join(ps)
         format_func = field_types.get(a)
-        d[a] = format_func(v) if not isinstance(v, dict) and format_func else v
+        expr = format_func(v) if not isinstance(v, dict) and format_func else v
+        if a in d and isinstance(d[a], dict):
+            d[a].update(expr)
+        else:
+            d[a] = expr
 
     # for t, fs in field_types.items():
     #     for f in fs:
