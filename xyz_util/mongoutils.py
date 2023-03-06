@@ -206,6 +206,8 @@ class Store(object):
         if not fks:
             return d
         for kn, sn in fks.items():
+            if kn not in d:
+                continue
             id = mongo_id_value(d[kn])
             if not id:
                 continue
