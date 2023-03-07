@@ -445,7 +445,8 @@ def filed_type_func(f):
     return {
         'integer': int,
         'number': float,
-        'object': json.loads
+        'object': json.loads,
+        'oid': ObjectId
     }.get(f, text_type)
 
 def all_fields_type_func(fs):
@@ -457,7 +458,7 @@ def json_schema(d, prefix=''):
     tm = {
         int: 'integer',
         bson.int64.Int64: 'integer',
-        bson.objectid.ObjectId: 'string',
+        ObjectId: 'oid',
         float: 'number',
         bool: 'boolean',
         list: 'array',

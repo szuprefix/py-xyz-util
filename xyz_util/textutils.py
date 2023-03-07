@@ -65,3 +65,21 @@ class TreeNode(object):
 
     def __str__(self):
         return self.name
+
+    def to_dict(self):
+        from collections import OrderedDict
+        d = dict(name=self.name, prefix = self.prefix)
+        ds = OrderedDict()
+        for a in self.items:
+            ds[a.name]=(a.to_dict())
+        if ds:
+            d['items'] = ds
+        return d
+
+    def to_array(self, parent=''):
+        from collections import OrderedDict
+        d = dict(name=self.name, prefix=self.prefix, parent=parent)
+        ds = [d]
+        for a in self.items:
+            ds+= a.to_array(parent=self.name)
+        return ds
