@@ -25,13 +25,18 @@ class Transformer(object):
         d = {'duration': extract_between(s, 'Duration: ', ', ')}
         for stream in ss:
             if ' Video:' in stream:
-                for st in stream.split(', '):
+                sts = stream.split(', ')
+                for st in sts:
                     ps = st.split(' ')
                     if ps[-1] == 'fps':
                         d['fps'] = int(ps[0])
                     elif '[SAR' in st:
                         w, h = ps[0].split('x')
                         d['w'], d['h'] = int(w), int(h)
+                if 'w' not in d and 'x' in sts[2]:
+                    w, h = sts[2].strip().split(' ')[0].split('x')
+                    d['w'], d['h'] = int(w), int(h)
+
         return d
 
     def save(self, src_path, dest_path, *args, **kwargs):
