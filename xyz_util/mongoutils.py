@@ -159,8 +159,8 @@ class Store(object):
             rs = dict([(a['_id'], a['count']) for a in rs])
         return rs
 
-    def group_by(self, field, aggregate={'count': {'$sum': 1}}, filter=None, output='array', unwind=False):
-        ps = []
+    def group_by(self, field, aggregate={'count': {'$sum': 1}}, filter=None, output='array', unwind=False, prepare=[]):
+        ps = []+ prepare
         if filter:
             ps.append({'$match': filter})
         if unwind:
