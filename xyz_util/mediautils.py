@@ -29,7 +29,7 @@ class Transformer(object):
                 for st in sts:
                     ps = st.split(' ')
                     if ps[-1] == 'fps':
-                        d['fps'] = int(ps[0])
+                        d['fps'] = int(float(ps[0]))
                     elif '[SAR' in st:
                         w, h = ps[0].split('x')
                         d['w'], d['h'] = int(w), int(h)
