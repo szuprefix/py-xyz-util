@@ -2,6 +2,8 @@
 # author = 'denishuang'
 from __future__ import unicode_literals
 
+import os
+
 from django.conf import settings
 from django.utils.functional import cached_property
 from rest_framework.pagination import PageNumberPagination
@@ -14,8 +16,8 @@ from bson.objectid import ObjectId
 from django.dispatch import Signal
 
 DEFAULT_DB = {
-    'SERVER': 'mongodb://localhost:27017/',
-    'DB': access(settings, 'DATABASES.default.NAME').split('/')[-1].split('.')[0]
+    'SERVER': 'mongodb://%s' % (os.environ.get('MONGO_SERVER', 'localhost:27017')),
+    'DB': os.environ.get('MONGO_DB') or access(settings, 'DATABASES.default.NAME').split('/')[-1].split('.')[0]
 }
 CONF = getattr(settings, 'MONGODB', DEFAULT_DB)
 
