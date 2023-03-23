@@ -39,8 +39,8 @@ class Transformer(object):
 
         return d
 
-    def save(self, src_path, dest_path, *args, **kwargs):
-        return self.execute('-i', src_path, dest_path, *args, **kwargs)
+    def save(self, src_path, *args, **kwargs):
+        return self.execute('-i', src_path, *args, **kwargs)
 
     def crop(self, src_path, dest_path, w=0, h=0, x=0, y=0, **kwargs):
         return self.save(src_path, '-vf', f'crop={w}:{h}:{x}:{y}', dest_path, **kwargs)
