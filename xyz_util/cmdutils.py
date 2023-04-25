@@ -19,3 +19,6 @@ def cmd_call(cmd, without_output=False):
         else:
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
             return p.stdout.read()
+
+def get_files(path):
+    return cmd_call(f'ls {path}').split('\n')
