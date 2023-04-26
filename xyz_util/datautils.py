@@ -397,6 +397,12 @@ def filter_emoji(desstr, restr=''):
     return co.sub(restr, text_type(desstr))
 
 
+def snake_case(name):
+    import re
+    s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+    return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
+
 class Accessor(str):
     '''
     A string describing a path from one object to another via attribute/index
@@ -552,6 +558,7 @@ def trim_by_length(s, ml, charset='utf8'):
         if l == ml:
             return rs
     return rs
+
 
 def reorder(dl, new_orders):
     for a in new_orders:
