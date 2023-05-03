@@ -54,9 +54,9 @@ class Transformer(object):
         return self.execute('-i', video_path, '-i', audio_path, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', save_path,
                             **kwargs)
 
-    def images_to_video(self, images_path, video_path, fps=5, **kwargs):
+    def images_to_video(self, images_path, video_path, *args, fps=5, **kwargs):
         return self.execute('-r', f'{fps}', '-i', images_path, '-pix_fmt', 'yuv420p', '-vf',
-                            "pad=ceil(iw/2)*2:ceil(ih/2)*2", '-c:v', 'libx265', video_path, **kwargs)
+                            "pad=ceil(iw/2)*2:ceil(ih/2)*2", *args, video_path, **kwargs)
 
     def video_concat(self, videos, output, **kwargs):
         inputs = []
