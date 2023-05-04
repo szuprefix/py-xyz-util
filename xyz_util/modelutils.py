@@ -199,6 +199,8 @@ def find_field(m, find_func):
         if find_func(f):
             return f
 
+def get_datetime_field(meta):
+    return find_field(meta, lambda f: isinstance(f, (djfields.DateTimeField, djfields.DateField)))
 
 def get_generic_foreign_key(meta):
     return find_field(meta, lambda f: isinstance(f, GenericForeignKey))

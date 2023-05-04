@@ -222,6 +222,8 @@ def group_by_with_generic_relation(qset, group, measures=[], trans_map={}):
 class DateStat(object):
     def __init__(self, query_set, time_field):
         self.query_set = query_set
+        if time_field is None:
+            time_field = modelutils.get_datetime_field(query_set.model).name
         self.time_field = time_field
         self.model = self.query_set.model
 
