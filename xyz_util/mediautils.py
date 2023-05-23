@@ -12,9 +12,10 @@ class Transformer(object):
         self.cmd = cmd
 
     def execute(self, *args, **kwargs):
-        r = subprocess.run([self.cmd, '-y', '-loglevel', 'error'] + list(args), **kwargs)
+        cmd_params = [self.cmd, '-y', '-loglevel', 'error'] + list(args)
+        r = subprocess.run(cmd_params, **kwargs)
         if r.returncode:
-            raise Exception(r.stderr.decode())
+            raise Exception('%s:%s\n%s' % (r.returncode, r.stderr, cmd_params))
         return r.stdout
 
     def probe(self, *args, **kwargs):

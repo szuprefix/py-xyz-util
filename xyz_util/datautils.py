@@ -4,14 +4,14 @@ import re
 from decimal import Decimal
 from six import text_type
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db.models.fields.files import FieldFile
 from datetime import date, datetime
-from django.db.models import Model, QuerySet
 from collections import OrderedDict
 
 
 class JSONEncoder(DjangoJSONEncoder):
     def default(self, o):
+        from django.db.models.fields.files import FieldFile
+        from django.db.models import Model, QuerySet
         if isinstance(o, (FieldFile,)):
             return o.name
         if isinstance(o, Model):
