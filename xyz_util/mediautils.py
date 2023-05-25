@@ -15,7 +15,8 @@ class Transformer(object):
         cmd_params = [self.cmd, '-y', '-loglevel', 'error'] + list(args)
         r = subprocess.run(cmd_params, **kwargs)
         if r.returncode:
-            raise Exception('%s:%s\n%s' % (r.returncode, r.stderr, cmd_params))
+            error = r.stderr.decode() if r.stderr else ''
+            raise Exception('%s:%s\n%s' % (r.returncode, error, cmd_params))
         return r.stdout
 
     def probe(self, *args, **kwargs):

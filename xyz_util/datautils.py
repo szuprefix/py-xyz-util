@@ -112,6 +112,16 @@ def re_group_split(r, s):
     return g
 
 
+def group_by(data, groups):
+    res = {}
+    gc = len(groups)
+    for d in data:
+        for i in range(gc):
+            k = tuple([d.get(g) for g in groups[:i + 1]])
+            res.setdefault(k, []).append(d)
+    return res
+
+
 def count_group_by(data, groups):
     """
 
