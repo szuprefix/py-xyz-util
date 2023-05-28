@@ -114,11 +114,16 @@ def re_group_split(r, s):
 
 def group_by(data, groups):
     res = {}
+    if isinstance(groups, text_type):
+        groups = [groups]
     gc = len(groups)
     for d in data:
-        for i in range(gc):
-            k = tuple([d.get(g) for g in groups[:i + 1]])
-            res.setdefault(k, []).append(d)
+        # for i in range(gc):
+        if gc > 1:
+            k = tuple([d.get(g) for g in groups])
+        else:
+            k = d.get(groups[0])
+        res.setdefault(k, []).append(d)
     return res
 
 
