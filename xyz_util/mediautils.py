@@ -47,7 +47,6 @@ class Transformer(object):
     def crop(self, src_path, dest_path, w=0, h=0, x=0, y=0, **kwargs):
         return self.save(src_path, '-vf', f'crop={w}:{h}:{x}:{y}', dest_path, **kwargs)
 
-
     def video_to_images(self, video_path, output_dir, fps=6, file_name_template='%05d.png', **kwargs):
         return self.execute('-i', video_path, '-r', f'{fps}', '-f', 'image2', f'{output_dir}/{file_name_template}',
                             **kwargs)
@@ -57,6 +56,12 @@ class Transformer(object):
                             **kwargs)
 
     def images_to_video(self, images_path, video_path, *args, fps=5, **kwargs):
+        if isinstance(images_path, (list, tuple)) and images_path:
+            from .cmdutils import link_sequenced_files
+            from pathlib import Path
+            ext = Path(images_path[0]).suffix
+            dir = link_sequenced_files(images_path, ext=ext)
+            images_path = f'{dir.name}/%05d{ext}'
         return self.execute('-r', f'{fps}', '-i', images_path, '-pix_fmt', 'yuv420p', '-vf',
                             "pad=ceil(iw/2)*2:ceil(ih/2)*2", *args, video_path, **kwargs)
 

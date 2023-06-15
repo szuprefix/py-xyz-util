@@ -22,3 +22,11 @@ def cmd_call(cmd, without_output=False):
 
 def get_files(path):
     return cmd_call(f'ls {path}').split('\n')
+
+def link_sequenced_files(file_list, ext=''):
+    from tempfile import TemporaryDirectory
+    dir = TemporaryDirectory()
+    dn = dir.name
+    for i, p in enumerate(file_list):
+        cmd_call(f'ln -s {p} {dn}/{i:05}{ext}')
+    return dir
