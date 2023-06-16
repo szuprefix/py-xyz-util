@@ -65,14 +65,18 @@ class Transformer(object):
         return self.execute('-r', f'{fps}', '-i', images_path, '-pix_fmt', 'yuv420p', '-vf',
                             "pad=ceil(iw/2)*2:ceil(ih/2)*2", *args, video_path, **kwargs)
 
-    def video_concat(self, videos, output, **kwargs):
+    def video_concat(self, videos, output, audio=1, **kwargs):
         inputs = []
         streams = ''
         n = len(videos)
         for i, v in enumerate(videos):
-            streams += f'[{i}:0][{i}:1]'
+            streams += f'[{i}:0]'
+            if audio is not None:
+                streams += f'[{i}:{audio}]'
             inputs.append('-i')
             inputs.append(v)
 
+        if audio is None:
+            return self.execute(*inputs, '-filter_complex', f'{streams}concat=n={n}:v=1[v]', '-map', '[v]', output, **kwargs)
         return self.execute(*inputs, '-filter_complex', f'{streams}concat=n={n}:v=1:a=1[v][a]', '-map', '[v]', '-map',
                             '[a]', output, **kwargs)
