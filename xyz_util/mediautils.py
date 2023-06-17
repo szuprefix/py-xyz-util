@@ -51,11 +51,11 @@ class Transformer(object):
         return self.execute('-i', video_path, '-r', f'{fps}', '-f', 'image2', f'{output_dir}/{file_name_template}',
                             **kwargs)
 
-    def video_set_audio(self, video_path, audio_path, save_path, **kwargs):
-        return self.execute('-i', video_path, '-i', audio_path, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', save_path,
+    def video_set_audio(self, video_path, audio_path, save_path, *args, **kwargs):
+        return self.execute('-i', video_path, '-i', audio_path, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', *args, save_path,
                             **kwargs)
 
-    def images_to_video(self, images_path, video_path, *args, fps=5, **kwargs):
+    def images_to_video(self, images_path, video_path, *args, vf='', fps=5, **kwargs):
         if isinstance(images_path, (list, tuple)) and images_path:
             from .cmdutils import link_sequenced_files
             from pathlib import Path
@@ -63,9 +63,9 @@ class Transformer(object):
             dir = link_sequenced_files(images_path, ext=ext)
             images_path = f'{dir.name}/%05d{ext}'
         return self.execute('-r', f'{fps}', '-i', images_path, '-pix_fmt', 'yuv420p', '-vf',
-                            "pad=ceil(iw/2)*2:ceil(ih/2)*2", *args, video_path, **kwargs)
+                            f"pad=ceil(iw/2)*2:ceil(ih/2)*2{vf}", *args, video_path, **kwargs)
 
-    def video_concat(self, videos, output, audio=1, **kwargs):
+    def video_concat(self, videos, output, audio=1, vf='', **kwargs):
         inputs = []
         streams = ''
         n = len(videos)
@@ -77,6 +77,6 @@ class Transformer(object):
             inputs.append(v)
 
         if audio is None:
-            return self.execute(*inputs, '-filter_complex', f'{streams}concat=n={n}:v=1[v]', '-map', '[v]', output, **kwargs)
+            return self.execute(*inputs, '-filter_complex', f'{streams}concat=n={n}:v=1[v]{vf}', '-map', '[v]', output, **kwargs)
         return self.execute(*inputs, '-filter_complex', f'{streams}concat=n={n}:v=1:a=1[v][a]', '-map', '[v]', '-map',
                             '[a]', output, **kwargs)
