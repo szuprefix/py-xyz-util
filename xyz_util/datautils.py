@@ -547,12 +547,10 @@ def access(obj, path, quiet=True):
 def import_function(s):
     import importlib
     ps = s.split(':')
-    try:
-        m = importlib.import_module(ps[0])
-        func = getattr(m, ps[1])
-        return func
-    except:
-        return s
+    m = importlib.import_module(ps[0])
+    func = getattr(m, ps[1])
+    return func
+
 
 
 def list_dict(l):

@@ -109,6 +109,9 @@ class JSONField(djfields.Field):
         val = self.value_from_object(obj)
         return json.dumps(val, indent=2, cls=JSONEncoder)
 
+class SmallJSONField(JSONField):
+    def get_internal_type(self):
+        return "CharField"
 
 class KeyValueJsonField(JSONField):
     def formfield(self, **kwargs):

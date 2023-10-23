@@ -217,7 +217,7 @@ class Browser(object):
         from bs4 import BeautifulSoup
         return BeautifulSoup(e.get_attribute('outerHTML'), 'html.parser')
 
-    def swith_iframe(self, frame_id):
+    def switch_iframe(self, frame_id):
         self.element("#%s" % frame_id)
         self.driver.switch_to.frame(frame_id)
 
@@ -308,3 +308,7 @@ def html2text(text):
         .replace('&amp;', '&') \
         .replace('&#39;', "'") \
         .replace('&apos;', "'")
+
+def html_get_text(html):
+    import bs4
+    return bs4.BeautifulSoup(html, 'html.parser').get_text()

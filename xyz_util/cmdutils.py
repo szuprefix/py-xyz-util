@@ -20,8 +20,10 @@ def cmd_call(cmd, without_output=False):
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE)
             return p.stdout.read()
 
+
 def get_files(path):
     return cmd_call(f'ls {path}').split('\n')
+
 
 def link_sequenced_files(file_list, ext=''):
     from tempfile import TemporaryDirectory
