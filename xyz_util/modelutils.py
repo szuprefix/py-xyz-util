@@ -13,11 +13,54 @@ from django.forms.fields import TypedMultipleChoiceField
 from django.forms.widgets import CheckboxSelectMultiple
 from django.db.models import Count, Model, DateTimeField, Expression, IntegerField, QuerySet, ForeignKey, ManyToManyField
 import json, re
-
 from six import text_type, string_types
 
-from .datautils import JSONEncoder, auto_code
+from .datautils import auto_code
 from . import formutils
+
+
+from django.core.serializers.json import DjangoJSONEncoder
+class JSONEncoder(DjangoJSONEncoder):
+    def default(self, o):
+        from django.db.models.fields.files import FieldFile
+        from django.db.models import Model, QuerySet
+        if isinstance(o, (FieldFile,)):
+            return o.name
+        if isinstance(o, Model):
+            return o.pk
+        if isinstance(o, QuerySet):
+            return [self.default(a) for a in o]
+        return super(JSONEncoder, self).default(o)
+
+
+def jsonSpecialFormat(v):
+    from decimal import Decimal
+    from datetime import date, datetime
+    if isinstance(v, Decimal):
+        return float(v)
+    if isinstance(v, datetime):
+        return v.strftime('%Y-%m-%d %H:%M:%S')
+    if isinstance(v, Model):
+        return v.pk
+    if isinstance(v, date):
+        return v.isoformat()
+    if isinstance(v, (FieldFile,)):
+        return {'name:': v.name, 'url': v.url}
+    return v
+
+
+def model2dict(model, fields=[], exclude=[]):
+    return dict([(attr, jsonSpecialFormat(getattr(model, attr)))
+                 for attr in [f.name for f in model._meta.fields]
+                 if not (fields and attr not in fields or exclude and attr in exclude)])
+
+
+def queryset2dictlist(qset, fields=[], exclude=[]):
+    return [model2dict(m, fields, exclude) for m in qset]
+
+
+def queryset2dictdict(qset, fields=[], exclude=[]):
+    return dict([(m.pk, model2dict(m, fields, exclude)) for m in qset])
 
 
 class TimeFieldMixin(object):
