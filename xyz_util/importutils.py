@@ -73,7 +73,7 @@ class BaseImporter(object):
             r.append(d)
             fs.update([i for i in d.keys() if i not in [ERROR_KEY, WARNING_KEY]])
         self.clean_no_duplicate(r)
-        r.sort(key=lambda d: d[ERROR_KEY], reverse=True)
+        r.sort(key=lambda d: bool(d[ERROR_KEY]), reverse=True)
         return {"data": r, "fields": self._sort_field_names(fs)}
 
     def get_cleaned_data(self, data):
