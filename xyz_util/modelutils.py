@@ -16,7 +16,6 @@ import json, re
 from six import text_type, string_types
 
 from .datautils import auto_code
-from . import formutils
 
 
 from django.core.serializers.json import DjangoJSONEncoder
@@ -118,7 +117,8 @@ class CompositeChoicesField(djfields.CharField):
         return self.to_python(value)
 
     def formfield(self, **kwargs):
-        defaults = {"form_class": formutils.CompositeChoicesField,
+        from formutils import CompositeChoicesField
+        defaults = {"form_class": CompositeChoicesField,
                     "choice_set": self.choice_set,
                     # "initial":{},
                     "format_str": self.format_str,
@@ -143,7 +143,8 @@ class JSONField(djfields.Field):
         return json.loads(value)
 
     def formfield(self, **kwargs):
-        defaults = {'form_class': formutils.JsonField}
+        from formutils import JsonField
+        defaults = {'form_class': JsonField}
         defaults.update(kwargs)
         return super(JSONField, self).formfield(**defaults)
         # return formutils.JsonField(**kwargs)
@@ -158,7 +159,8 @@ class SmallJSONField(JSONField):
 
 class KeyValueJsonField(JSONField):
     def formfield(self, **kwargs):
-        defaults = {'form_class': formutils.KeyValueJsonField}
+        from formutils import KeyValueJsonField
+        defaults = {'form_class': KeyValueJsonField}
         defaults.update(kwargs)
         return super(JSONField, self).formfield(**defaults)
 
@@ -179,7 +181,8 @@ class WordSetField(djfields.Field):
         return value.split("\n")
 
     def formfield(self, **kwargs):
-        defaults = {'form_class': formutils.WordSetField}
+        from formutils import WordSetField
+        defaults = {'form_class': WordSetField}
         defaults.update(kwargs)
         return super(WordSetField, self).formfield(**defaults)
 
