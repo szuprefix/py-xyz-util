@@ -7,7 +7,7 @@ from collections import OrderedDict
 
 
 def node2dict(node):
-    children = node.getchildren()
+    children = list(node)
     if not children:
         return node.text
     d = {}
@@ -44,7 +44,7 @@ def dictlist2arraylist(dict_data, field_names):
 def node2model(node, model, timestamp_fields=[], name_format_func=None):
     if name_format_func == None:
         name_format_func = lambda x: x[0].lower() + x[1:]
-    for cnode in node.getchildren():
+    for cnode in node:
         tg = name_format_func(cnode.tag)
         tx = cnode.text
         if tg in timestamp_fields:
