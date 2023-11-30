@@ -181,7 +181,7 @@ def strQ2B(ustring):
         elif (inside_code >= 65281 and inside_code <= 65374):  # 全角字符（除空格）根据关系转化
             inside_code -= 65248
 
-        rstring += unichr(inside_code)
+        rstring += chr(inside_code)
     return rstring
 
 
@@ -197,7 +197,7 @@ def strB2Q(ustring):
         elif inside_code >= 32 and inside_code <= 126:  # 半角字符（除空格）根据关系转化
             inside_code += 65248
 
-        rstring += unichr(inside_code)
+        rstring += chr(inside_code)
     return rstring
 
 
