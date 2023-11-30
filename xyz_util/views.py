@@ -25,7 +25,7 @@ class ContextJsonDumpsMixin(object):
                  msg='ok',
                  data=self.get_json_contexts(context)
                  ),
-            encoder=datautils.JSONEncoder)
+            encoder=modelutils.JSONEncoder)
 
 
 class FormResponseJsonMixin(object):
@@ -39,7 +39,7 @@ class FormResponseJsonMixin(object):
             data['object'] = model_to_dict(self.object, form._meta.fields, form._meta.exclude)
             m = self.object._meta
             data['model'] = "%s.%s" % (m.app_label, m.model_name)
-        return JsonResponse(dict(code=0, msg='ok', data=data), encoder=datautils.JSONEncoder)
+        return JsonResponse(dict(code=0, msg='ok', data=data), encoder=modelutils.JSONEncoder)
 
     def form_invalid(self, form):
         return JsonResponse(dict(code=1, msg=u'表单检验不通过', data=dict(errors=form.errors)))

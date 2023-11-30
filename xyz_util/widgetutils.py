@@ -1,6 +1,6 @@
 # -*- coding:utf-8 -*-
 from __future__ import unicode_literals
-from .datautils import JSONEncoder
+from .modelutils import JSONEncoder
 from six import string_types
 __author__ = 'Administrator'
 
