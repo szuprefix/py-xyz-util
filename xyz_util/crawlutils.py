@@ -112,6 +112,7 @@ def maintain_cookies(response, cookies):
         return
     cookies.update(response.cookies)
 
+
 def extract_url(s):
     import re
     s = s.replace('\xc2\xa0', ' ')
@@ -121,6 +122,14 @@ def extract_url(s):
         for sc in ['http://', 'https://']:
             if sc in a:
                 return a[a.index(sc):]
+
+
+def is_url(url):
+    if not url or not isinstance(url, text_type):
+        return False
+    import re
+    RE_URL = re.compile('^https?://')
+    return bool(url and RE_URL.match(url))
 
 
 def trim_url(s):
@@ -292,10 +301,12 @@ def retry(func, times=3, interval=10):
                 continue
             raise Exception('retry failed')
 
-def readability_summary(url, html_partial=True):
-    r = ScrapyResponse(url)
+
+def readability_summary(html, html_partial=True):
+    if is_url(html):
+        html = ScrapyResponse(html).text
     from readability import Document
-    doc = Document(r.text)
+    doc = Document(html)
     return doc.summary(html_partial=html_partial)
 
 
@@ -309,6 +320,42 @@ def html2text(text):
         .replace('&#39;', "'") \
         .replace('&apos;', "'")
 
+
 def html_get_text(html):
     import bs4
-    return bs4.BeautifulSoup(html, 'html.parser').get_text()
+    return bs4.BeautifulSoup(html, 'html.parser').get_text().strip()
+
+
+class Reader:
+
+    def __init__(self, main_css=None):
+        self.main_css=main_css
+
+    def read_images(self, r):
+        for e in r.css('img'):
+            yield dict(
+                src=e.css('::attr("src")').get(),
+                alt=e.css('::attr("alt")').get()
+            )
+
+    def read_meta(self, r, fs=['title', 'description', 'updated_time', 'image'], prefix='og:'):
+        return dict([(f, r.css(f'meta[property="{prefix}{f}"]::attr(content)').get()) for f in fs])
+
+    def read(self, r):
+        if is_url(r):
+            r = ScrapyResponse(r)
+        if self.main_css:
+            h = r.css(self.main_css).get()
+        else:
+            h = readability_summary(r.text)
+        from scrapy.http import HtmlResponse
+        pr = HtmlResponse(url=r.url, encoding='utf8', body=h)
+        d = self.read_meta(r)
+        d.update(
+            url=r.url,
+            title=r.css('title::text').get().strip(),
+            text=html_get_text(h),
+            html=h,
+            images=list(self.read_images(pr))
+        )
+        return d
