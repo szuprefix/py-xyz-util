@@ -124,10 +124,10 @@ class Store(object):
         return self.collection.update_many(cond, d)
 
     def inc(self, cond, value):
-        self.collection.update(cond, {'$inc': value}, upsert=True)
+        self.collection.update_many(cond, {'$inc': value}, upsert=True)
 
     def add_to_set(self, cond, value):
-        self.collection.update(cond, {'$addToSet': value}, upsert=True)
+        self.collection.update_many(cond, {'$addToSet': value}, upsert=True)
 
     def count(self, filter=None, distinct=False):
         if distinct:
