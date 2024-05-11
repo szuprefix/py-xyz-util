@@ -56,11 +56,14 @@ def http_post(url, **kwargs):
 
 
 def http_request(url, data=None, mobile_mode=True, cookies='', referer=None, extra_headers={}, timeout=(20, 20),
-                 proxy=True, allow_redirects=True):
+                 proxy=True, allow_redirects=True, requests=requests.session(), no_agent=False):
     headers = {
         "User-Agent": UA_MOBILE if mobile_mode else UA_PC,
         "Accept-Encoding": "gzip"
     }
+    if no_agent:
+        del headers['User-Agent']
+
     headers.update(extra_headers)
     if referer:
         headers['Referer'] = referer
@@ -326,10 +329,29 @@ def html_get_text(html):
     return bs4.BeautifulSoup(html, 'html.parser').get_text().strip()
 
 
+def clean_html(html):
+    if not html:
+        return ''
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, 'html.parser')
+
+    for tag in soup.find_all(True):
+        fs = list(tag.attrs.keys())
+        for f in fs:
+            if f == 'href' and tag.name == 'a' and 'javascript:' not in tag.attrs[f]:
+                continue
+            if f == 'src' and tag.name == 'img':
+                continue
+            del tag[f]
+        if tag.name == 'a':
+            tag.attrs['target'] = '_blank'
+    return str(soup)
+
+
 class Reader:
 
     def __init__(self, main_css=None):
-        self.main_css=main_css
+        self.main_css = main_css
 
     def read_images(self, r):
         for e in r.css('img'):
@@ -353,9 +375,10 @@ class Reader:
         d = self.read_meta(r)
         d.update(
             url=r.url,
-            title=r.css('title::text').get().strip(),
+            title=r.css('head title::text').get().strip(),
             text=html_get_text(h),
             html=h,
             images=list(self.read_images(pr))
         )
         return d
+

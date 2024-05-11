@@ -97,7 +97,10 @@ class Store(object):
     def find(self, *args, **kwargs):
         if self.ordering and 'sort' not in kwargs:
             kwargs['sort'] = [django_order_field_to_mongo_sort(s) for s in self.ordering]
-        return self.collection.find(*args, **kwargs)
+        rs = self.collection.find(*args, **kwargs)
+        if not hasattr(rs, 'count'):
+            setattr(rs, 'count', lambda: self.count(args[0]))
+        return rs
 
     def upsert(self, cond, value, **kwargs):
         d = {'$set': value}
@@ -139,7 +142,9 @@ class Store(object):
             for a in self.collection.aggregate(gs):
                 return a['count']
             return 0
-        return self.collection.count(filter)
+        if not filter:
+            return self.collection.estimated_document_count()
+        return self.collection.count_documents(filter)
 
     def sum(self, field, filter=None):
         gs = []

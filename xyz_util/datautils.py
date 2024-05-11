@@ -500,6 +500,17 @@ A = Accessor  # alias
 def access(obj, path, quiet=True):
     return Accessor(path).resolve(obj, quiet=quiet)
 
+def access_list(obj, path):
+    ps = path.split('.*.')
+    a = obj
+    rs = []
+    ns = [obj]
+    for p in ps:
+        a = access(obj, p)
+        if a is not None:
+            rs.append(a)
+
+
 
 def import_function(s):
     import importlib
