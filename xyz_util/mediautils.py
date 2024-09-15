@@ -2,8 +2,9 @@
 # author = 'denishuang'
 from __future__ import unicode_literals
 import subprocess
+import os
 
-FFMPEG = "ffmpeg"
+FFMPEG = os.environ.get('FFMPEG', "ffmpeg")
 
 
 class Transformer(object):

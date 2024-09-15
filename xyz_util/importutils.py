@@ -1,6 +1,5 @@
 # -*- coding:utf-8 -*-
 from __future__ import unicode_literals
-from . import excelutils
 
 from django.utils.functional import cached_property
 from .validators import format_split_by_bracket, format_banjiao, field_userid
@@ -111,6 +110,7 @@ class BaseImporter(object):
         return r
 
     def get_excel_data(self, excel):
+        from . import excelutils
         return excelutils.excel2json(
             excel,
             field_names_template=self.synonyms_map.keys(),

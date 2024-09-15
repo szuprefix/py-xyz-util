@@ -7,7 +7,6 @@ from django.contrib.contenttypes.models import ContentType
 from django.apps.registry import apps
 __author__ = 'denishuang'
 
-from django.utils.encoding import force_text
 import django.db.models.fields as djfields
 from django.forms.fields import TypedMultipleChoiceField
 from django.forms.widgets import CheckboxSelectMultiple
@@ -87,13 +86,14 @@ class CommaSeparatedIntegerField(djfields.CommaSeparatedIntegerField):
 
 class MutipleGetFieldDisplayModelMixin:
     def _get_FIELD_display(self, field):
+        from django.utils.encoding import force_str
         value = getattr(self, field.attname)
         print(value, type(value))
         if value:
             d = dict(field.flatchoices)
-            return ",".join([force_text(d.get(v, v), strings_only=True) for v in value.split(",")])
+            return ",".join([force_str(d.get(v, v), strings_only=True) for v in value.split(",")])
         else:
-            return force_text(dict(field.flatchoices).get(value, value), strings_only=True)
+            return force_str(dict(field.flatchoices).get(value, value), strings_only=True)
 
 
 class CompositeChoicesField(djfields.CharField):

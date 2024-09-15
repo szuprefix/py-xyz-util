@@ -5,7 +5,7 @@ import sys
 
 setup(
     name="xyz-util",
-    version="0.9.9",
+    version="1.0.1",
     author="szuprefix",
     author_email="szuprefix@126.com",
     description="common utils",
@@ -26,8 +26,6 @@ setup(
         "Topic :: Internet",
         "Topic :: Software Development :: Libraries :: Python Modules",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2",
-        "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
