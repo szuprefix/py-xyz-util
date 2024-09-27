@@ -5,7 +5,7 @@ import sys
 
 setup(
     name="xyz-util",
-    version="1.0.1",
+    version="1.1.0",
     author="szuprefix",
     author_email="szuprefix@126.com",
     description="common utils",

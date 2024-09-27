@@ -3,32 +3,49 @@
 from __future__ import unicode_literals
 
 import os
-
-from django.conf import settings
-from django.utils.functional import cached_property
-from rest_framework.pagination import PageNumberPagination
-from rest_framework import permissions, exceptions
 from .datautils import access, import_function
-from django.core.paginator import Paginator
 from six import text_type
 from bson import json_util, ObjectId
 from bson.objectid import ObjectId
-from django.dispatch import Signal
 
-DEFAULT_DB = {
-    'SERVER': 'mongodb://%s' % (os.environ.get('MONGO_SERVER', 'localhost:27017')),
-    'DB': os.environ.get('MONGO_DB') or access(settings, 'DATABASES.default.NAME').split('/')[-1].split('.')[0]
-}
-CONF = getattr(settings, 'MONGODB', DEFAULT_DB)
+SERVER = 'mongodb://%s' % (os.getenv('MONGO_SERVER', 'localhost:27017'))
+DB = os.getenv('MONGO_DB')
+TIMEOUT = 3000
 
+USING_DJANGO = os.getenv('DJANGO_SETTINGS_MODULE')
+
+
+if USING_DJANGO:
+    from django.conf import settings
+    if not DB:
+        a = access(settings, 'DATABASES.default.NAME')
+        if a:
+            DB = a.split('/')[-1].split('.')[0]
+    a = access(settings, 'MONGODB.SERVER')
+    if a:
+        SERVER = a
+    a = access(settings, 'MONGODB.DB')
+    if a:
+        DB = a
+    a = access(settings, 'MONGODB.TIMEOUT')
+    if a:
+        TIMEOUT = a
 
 def loadMongoDB(server=None, db=None, timeout=3000):
     import pymongo
-    client = pymongo.MongoClient(server or CONF['SERVER'], serverSelectionTimeoutMS=timeout)
-    return getattr(client, db or CONF.get('DB', DEFAULT_DB['DB']))
+    if not server:
+        server = SERVER
+    if not db:
+        db = DB
+    client = pymongo.MongoClient(server, serverSelectionTimeoutMS=timeout)
+    return getattr(client, db)
 
 
-LOADER = import_function(CONF.get('LOADER', 'xyz_util.mongoutils:loadMongoDB'))
+LOADER = loadMongoDB
+if USING_DJANGO:
+    a = access(settings, 'MONGODB.LOADER')
+    if a:
+        LOADER = import_function(a)
 
 
 def regex_contains(s):
@@ -57,7 +74,7 @@ def mongo_id_value(id):
 
 class Store(object):
     name = 'test_mongo_store'
-    timeout = CONF.get('TIMEOUT', 3000)
+    timeout = TIMEOUT
     field_types = {}
     fields = None
     search_fields = []
@@ -277,212 +294,6 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
     return d
 
 
-class MongoPaginator(Paginator):
-
-    @cached_property
-    def count(self):
-        # print('count')
-        return self.object_list.count()
-
-
-class MongoPageNumberPagination(PageNumberPagination):
-    django_paginator_class = MongoPaginator
-    page_size = 100
-    page_size_query_param = 'page_size'
-    max_page_size = 1000
-
-
-def drop_id_field(c):
-    for a in c:
-        a.pop('_id', None)
-        yield a
-
-
-def get_paginated_response(view, query, wrap=lambda a: a):
-    pager = MongoPageNumberPagination()
-    ds = pager.paginate_queryset(query, view.request, view=view)
-    rs = [wrap(a) for a in ds]
-    return pager.get_paginated_response(json_util._json_convert(rs))
-
-
-def model_get_and_patch(view, default={}, field_names=None):
-    from rest_framework.response import Response
-    a = view.get_object()
-    tn = a._meta.label_lower.replace('.', '_')
-    st = Store(name=tn)
-    fns = field_names or [view.action]
-    if view.request.method == 'GET':
-        fd = {'_id': 0}
-        for fn in fns:
-            fd[fn] = 1
-        d = st.collection.find_one({'id': a.id}, fd)
-        return Response(d)
-    else:
-        rd = view.request.data
-        pd = {}
-        for k in rd:
-            if k.split('.')[0] in fns:
-                pd[k] = rd[k]
-        d = st.upsert({'id': a.id}, pd)
-        return Response(d)
-
-
-from rest_framework import viewsets, response, serializers, fields
-
-
-class MongoSerializer(serializers.ModelSerializer):
-
-    def get_fields(self):
-        assert hasattr(self, 'Meta'), (
-            'Class {serializer_class} missing "Meta" attribute'.format(
-                serializer_class=self.__class__.__name__
-            )
-        )
-        assert hasattr(self.Meta, 'store'), (
-            'Class {serializer_class} missing "Meta.store" attribute'.format(
-                serializer_class=self.__class__.__name__
-            )
-        )
-        schema = Schema()
-        store = self.Meta.store
-        rs = {}
-        fm = {'string': fields.CharField,
-              'integer': fields.IntegerField,
-              'number': fields.FloatField,
-              'array': fields.ListField,
-              'object': fields.JSONField
-              }
-        for fn, ft in schema.desc(store.name).items():
-            field = fm[ft]()
-            rs[fn] = field
-        return rs
-
-
-mongo_posted = Signal(providing_args=['table', 'instance', 'created', 'update'])
-
-class MongoViewSet(viewsets.ViewSet):
-    permission_classes = [permissions.IsAdminUser]
-    store_name = None
-    store_class = None
-
-    def dispatch(self, request, *args, **kwargs):
-        self.store = self.get_store()
-        return super(MongoViewSet, self).dispatch(request, *args, **kwargs)
-
-    def get_store(self, name=None):
-        if name:
-            return Store(name=name)
-        if self.store_class:
-            return self.store_class()
-        elif self.store_name:
-            return Store(name=self.store_name)
-        raise exceptions.NotFound()
-
-    def get_foreign_key(self, store_name, id):
-        st = self.get_store(store_name)
-        return st.collection.get(id=id)
-
-    def options(self, request, *args, **kwargs):
-        # print(self.metadata_class)
-        # return super(MongoViewSet, self).options(request, *args, **kwargs)
-        sc = Schema().desc(self.get_store().name)
-        return response.Response(sc)
-
-    def get_serialize_fields(self):
-        return None
-
-    def filter_query(self, cond):
-        return cond
-
-    def list(self, request):
-        # print(request.query_params)
-        qps = request.query_params
-        cond = self.store.normalize_filter(qps)
-        # print(cond)
-        cond = self.filter_query(cond)
-        randc = qps.get('_random')
-        ordering = qps.get('ordering')
-        kwargs = {}
-        if ordering:
-            kwargs['sort'] = [django_order_field_to_mongo_sort(ordering)]
-        if randc:
-            rs = self.store.random_find(cond, count=int(randc), fields=self.get_serialize_fields())
-            return response.Response(dict(results=json_util._json_convert(rs)))
-        rs = self.store.find(cond, self.get_serialize_fields(), **kwargs)
-        return get_paginated_response(self, rs, wrap=self.eval_foreign_keys)
-
-    def eval_foreign_keys(self, d):
-        fks = getattr(self, 'foreign_keys', None)
-        return self.store.eval_foreign_keys(d, foreign_keys=fks)
-
-
-    def get_object(self, id=None):
-        _id = id if id else self.kwargs['pk']
-        cond = {'_id': ObjectId(_id)}
-        return json_util._json_convert(self.eval_foreign_keys(self.store.collection.find_one(cond, None)))
-
-    def retrieve(self, request, pk):
-        return response.Response(self.get_object())
-
-    def get_serialized_data(self):
-        d = {}
-        d.update(self.request.data)
-        return d
-
-    def update(self, request, pk, *args, **kargs):
-        instance = self.get_object()
-        data = self.get_serialized_data()
-        # print(data)
-        self.store.update({'_id': ObjectId(pk)}, data)
-        new_instance = self.get_object()
-        mongo_posted.send_robust(sender=type(self), instance=new_instance, update=data, created=False)
-        return response.Response(json_util._json_convert(new_instance))
-
-    def create(self, request, *args, **kargs):
-        data = self.get_serialized_data()
-        r = self.store.collection.insert_one(data)
-        return response.Response(self.get_object(r.inserted_id))
-
-    def patch(self, request, pk, *args, **kargs):
-        return self.update(request, pk, *args, **kargs)
-
-
-def filed_type_func(f):
-    import json
-    return {
-        'integer': int,
-        'number': float,
-        'object': json.loads,
-        'oid': ObjectId
-    }.get(f, text_type)
-
-def all_fields_type_func(fs):
-    return dict([(fn, filed_type_func(ft)) for fn, ft in fs.items()])
-
-
-def json_schema(d, prefix=''):
-    import bson
-    tm = {
-        int: 'integer',
-        bson.int64.Int64: 'integer',
-        ObjectId: 'oid',
-        float: 'number',
-        bool: 'boolean',
-        list: 'array',
-        text_type: 'string',
-        type(None): 'null',
-        dict: 'object'
-    }
-    r = {}
-    for k, v in d.items():
-        t = tm[type(v)]
-        fn = '%s%s' % (prefix, k)
-        r[fn] = t
-        if t == 'object':
-            r.update(json_schema(v, prefix='%s.' % fn))
-    return r
-
-
 class Schema(Store):
     name = 'XYZ_STORE_SCHEMA'
 
@@ -502,34 +313,249 @@ class Schema(Store):
         return d
 
 
-from rest_framework.metadata import SimpleMetadata
+if USING_DJANGO:
+    from django.utils.functional import cached_property
+    from django.core.paginator import Paginator
+    from django.dispatch import Signal
+
+    from rest_framework.pagination import PageNumberPagination
+    from rest_framework import permissions, exceptions
+    from rest_framework import viewsets, response, serializers, fields
+
+    class MongoPaginator(Paginator):
+
+        @cached_property
+        def count(self):
+            # print('count')
+            return self.object_list.count()
 
 
-class RestMetadata(SimpleMetadata):
-    def determine_actions(self, request, view):
-        actions = super(RestMetadata, self).determine_actions(request, view)
-        view.request = clone_request(request, 'GET')
-        try:
-            # Test global permissions
-            if hasattr(view, 'check_permissions'):
-                view.check_permissions(view.request)
-        except (exceptions.APIException, PermissionDenied, Http404):
-            pass
+    class MongoPageNumberPagination(PageNumberPagination):
+        django_paginator_class = MongoPaginator
+        page_size = 100
+        page_size_query_param = 'page_size'
+        max_page_size = 1000
+
+
+    def drop_id_field(c):
+        for a in c:
+            a.pop('_id', None)
+            yield a
+
+
+    def get_paginated_response(view, query, wrap=lambda a: a):
+        pager = MongoPageNumberPagination()
+        ds = pager.paginate_queryset(query, view.request, view=view)
+        rs = [wrap(a) for a in ds]
+        return pager.get_paginated_response(json_util._json_convert(rs))
+
+
+    def model_get_and_patch(view, default={}, field_names=None):
+        from rest_framework.response import Response
+        a = view.get_object()
+        tn = a._meta.label_lower.replace('.', '_')
+        st = Store(name=tn)
+        fns = field_names or [view.action]
+        if view.request.method == 'GET':
+            fd = {'_id': 0}
+            for fn in fns:
+                fd[fn] = 1
+            d = st.collection.find_one({'id': a.id}, fd)
+            return Response(d)
         else:
+            rd = view.request.data
+            pd = {}
+            for k in rd:
+                if k.split('.')[0] in fns:
+                    pd[k] = rd[k]
+            d = st.upsert({'id': a.id}, pd)
+            return Response(d)
 
-            search_fields = getattr(view, 'search_fields', [])
-            cf = lambda f: f[0] in ['^', '@', '='] and f[1:] or f
-            actions['SEARCH'] = search = {}
-            search['search_fields'] = [get_related_field_verbose_name(view.queryset.model, cf(f)) for f in
-                                       search_fields]
-            ffs = access(view, 'filter_class._meta.fields') or getattr(view, 'filter_fields', [])
-            if isinstance(ffs, dict):
-                search['filter_fields'] = [{'name': k, 'lookups': v} for k, v in ffs.items()]
-            else:
-                search['filter_fields'] = [{'name': a, 'lookups': 'exact'} for a in ffs]
-            search['ordering_fields'] = getattr(view, 'ordering_fields', [])
-            serializer = view.get_serializer()
-            actions['LIST'] = self.get_list_info(serializer)
-        finally:
-            view.request = request
-        return actions
+
+
+
+    class MongoSerializer(serializers.ModelSerializer):
+
+        def get_fields(self):
+            assert hasattr(self, 'Meta'), (
+                'Class {serializer_class} missing "Meta" attribute'.format(
+                    serializer_class=self.__class__.__name__
+                )
+            )
+            assert hasattr(self.Meta, 'store'), (
+                'Class {serializer_class} missing "Meta.store" attribute'.format(
+                    serializer_class=self.__class__.__name__
+                )
+            )
+            schema = Schema()
+            store = self.Meta.store
+            rs = {}
+            fm = {'string': fields.CharField,
+                  'integer': fields.IntegerField,
+                  'number': fields.FloatField,
+                  'array': fields.ListField,
+                  'object': fields.JSONField
+                  }
+            for fn, ft in schema.desc(store.name).items():
+                field = fm[ft]()
+                rs[fn] = field
+            return rs
+
+
+    mongo_posted = Signal(providing_args=['table', 'instance', 'created', 'update'])
+
+    class MongoViewSet(viewsets.ViewSet):
+        permission_classes = [permissions.IsAdminUser]
+        store_name = None
+        store_class = None
+
+        def dispatch(self, request, *args, **kwargs):
+            self.store = self.get_store()
+            return super(MongoViewSet, self).dispatch(request, *args, **kwargs)
+
+        def get_store(self, name=None):
+            if name:
+                return Store(name=name)
+            if self.store_class:
+                return self.store_class()
+            elif self.store_name:
+                return Store(name=self.store_name)
+            raise exceptions.NotFound()
+
+        def get_foreign_key(self, store_name, id):
+            st = self.get_store(store_name)
+            return st.collection.get(id=id)
+
+        def options(self, request, *args, **kwargs):
+            # print(self.metadata_class)
+            # return super(MongoViewSet, self).options(request, *args, **kwargs)
+            sc = Schema().desc(self.get_store().name)
+            return response.Response(sc)
+
+        def get_serialize_fields(self):
+            return None
+
+        def filter_query(self, cond):
+            return cond
+
+        def list(self, request):
+            # print(request.query_params)
+            qps = request.query_params
+            cond = self.store.normalize_filter(qps)
+            # print(cond)
+            cond = self.filter_query(cond)
+            randc = qps.get('_random')
+            ordering = qps.get('ordering')
+            kwargs = {}
+            if ordering:
+                kwargs['sort'] = [django_order_field_to_mongo_sort(ordering)]
+            if randc:
+                rs = self.store.random_find(cond, count=int(randc), fields=self.get_serialize_fields())
+                return response.Response(dict(results=json_util._json_convert(rs)))
+            rs = self.store.find(cond, self.get_serialize_fields(), **kwargs)
+            return get_paginated_response(self, rs, wrap=self.eval_foreign_keys)
+
+        def eval_foreign_keys(self, d):
+            fks = getattr(self, 'foreign_keys', None)
+            return self.store.eval_foreign_keys(d, foreign_keys=fks)
+
+
+        def get_object(self, id=None):
+            _id = id if id else self.kwargs['pk']
+            cond = {'_id': ObjectId(_id)}
+            return json_util._json_convert(self.eval_foreign_keys(self.store.collection.find_one(cond, None)))
+
+        def retrieve(self, request, pk):
+            return response.Response(self.get_object())
+
+        def get_serialized_data(self):
+            d = {}
+            d.update(self.request.data)
+            return d
+
+        def update(self, request, pk, *args, **kargs):
+            instance = self.get_object()
+            data = self.get_serialized_data()
+            # print(data)
+            self.store.update({'_id': ObjectId(pk)}, data)
+            new_instance = self.get_object()
+            mongo_posted.send_robust(sender=type(self), instance=new_instance, update=data, created=False)
+            return response.Response(json_util._json_convert(new_instance))
+
+        def create(self, request, *args, **kargs):
+            data = self.get_serialized_data()
+            r = self.store.collection.insert_one(data)
+            return response.Response(self.get_object(r.inserted_id))
+
+        def patch(self, request, pk, *args, **kargs):
+            return self.update(request, pk, *args, **kargs)
+
+
+    def filed_type_func(f):
+        import json
+        return {
+            'integer': int,
+            'number': float,
+            'object': json.loads,
+            'oid': ObjectId
+        }.get(f, text_type)
+
+    def all_fields_type_func(fs):
+        return dict([(fn, filed_type_func(ft)) for fn, ft in fs.items()])
+
+
+    def json_schema(d, prefix=''):
+        import bson
+        tm = {
+            int: 'integer',
+            bson.int64.Int64: 'integer',
+            ObjectId: 'oid',
+            float: 'number',
+            bool: 'boolean',
+            list: 'array',
+            text_type: 'string',
+            type(None): 'null',
+            dict: 'object'
+        }
+        r = {}
+        for k, v in d.items():
+            t = tm[type(v)]
+            fn = '%s%s' % (prefix, k)
+            r[fn] = t
+            if t == 'object':
+                r.update(json_schema(v, prefix='%s.' % fn))
+        return r
+
+
+    #
+    # from rest_framework.metadata import SimpleMetadata
+    #
+    #
+    # class RestMetadata(SimpleMetadata):
+    #     def determine_actions(self, request, view):
+    #         actions = super(RestMetadata, self).determine_actions(request, view)
+    #         view.request = clone_request(request, 'GET')
+    #         try:
+    #             # Test global permissions
+    #             if hasattr(view, 'check_permissions'):
+    #                 view.check_permissions(view.request)
+    #         except (exceptions.APIException, PermissionDenied, Http404):
+    #             pass
+    #         else:
+    #
+    #             search_fields = getattr(view, 'search_fields', [])
+    #             cf = lambda f: f[0] in ['^', '@', '='] and f[1:] or f
+    #             actions['SEARCH'] = search = {}
+    #             search['search_fields'] = [get_related_field_verbose_name(view.queryset.model, cf(f)) for f in
+    #                                        search_fields]
+    #             ffs = access(view, 'filter_class._meta.fields') or getattr(view, 'filter_fields', [])
+    #             if isinstance(ffs, dict):
+    #                 search['filter_fields'] = [{'name': k, 'lookups': v} for k, v in ffs.items()]
+    #             else:
+    #                 search['filter_fields'] = [{'name': a, 'lookups': 'exact'} for a in ffs]
+    #             search['ordering_fields'] = getattr(view, 'ordering_fields', [])
+    #             serializer = view.get_serializer()
+    #             actions['LIST'] = self.get_list_info(serializer)
+    #         finally:
+    #             view.request = request
+    #         return actions
