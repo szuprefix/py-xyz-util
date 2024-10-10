@@ -31,12 +31,8 @@ if USING_DJANGO:
     if a:
         TIMEOUT = a
 
-def loadMongoDB(server=None, db=None, timeout=3000):
+def loadMongoDB(server=SERVER, db=DB, timeout=TIMEOUT):
     import pymongo
-    if not server:
-        server = SERVER
-    if not db:
-        db = DB
     client = pymongo.MongoClient(server, serverSelectionTimeoutMS=timeout)
     return getattr(client, db)
 
@@ -80,7 +76,7 @@ class Store(object):
     search_fields = []
     ordering = ('-id',)
 
-    def __init__(self, server=None, db=None, name=None):
+    def __init__(self, server=SERVER, db=DB, name=None):
         self.db = LOADER(server, db, self.timeout)
         self.collection = getattr(self.db, name or self.name)
         if name:
