@@ -1,11 +1,9 @@
 #!/usr/bin/env python  
 from __future__ import print_function
 from setuptools import setup, find_packages
-import sys
-
 setup(
     name="xyz-util",
-    version="1.2.0",
+    version="1.2.2",
     author="szuprefix",
     author_email="szuprefix@126.com",
     description="common utils",
