@@ -9,7 +9,7 @@ from bson import json_util, ObjectId
 from bson.objectid import ObjectId
 
 SERVER = 'mongodb://%s' % (os.getenv('MONGO_SERVER', 'localhost:27017'))
-DB = os.getenv('MONGO_DB')
+DB = os.getenv('MONGO_DB') or os.path.basename(os.getcwd())
 TIMEOUT = 3000
 
 USING_DJANGO = os.getenv('DJANGO_SETTINGS_MODULE')
