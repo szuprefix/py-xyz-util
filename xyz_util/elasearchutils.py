@@ -1,9 +1,6 @@
 # -*- coding:utf-8 -*- 
 # author = 'denishuang'
 from __future__ import unicode_literals
-
-import os
-from .datautils import access, import_function
 from elasticsearch import Elasticsearch
 import os
 
@@ -16,8 +13,18 @@ class ESStore():
     index_name = None
     index_mapping = None
 
-    def __init__(self, server=ES_SERVER, user=ES_USER, password=ES_PASSWORD):
+    def __init__(
+            self,
+            index_name=None,
+            server=ES_SERVER,
+            user=ES_USER,
+            password=ES_PASSWORD
+    ):
+        # print('ES_SERVER:', server)
+        if index_name:
+            self.index_name = index_name
         self.es = Elasticsearch(server, basic_auth=(user, password))
+        self.create_index()
 
     def create_index(self):
         if self.es.indices.exists(index=self.index_name):
@@ -27,16 +34,26 @@ class ESStore():
     def index(self, d):
         return self.es.index(index=self.index_name, id=d['id'], body=d)
 
+    def get(self, id):
+        return self.es.get(
+            index=self.name,
+            id=id
+        )
+
     def count(self, **kwargs):
         return self.es.count(index=self.index_name, **kwargs)['count']
 
-    def search(self, kwargs):
+    def search(self, query, **kwargs):
         return self.es.search(
             index=self.index_name,
-            body=dict(
-                query=kwargs
-            )
+            query=query,
+            **kwargs
         )
+
+    def yield_hits(self, rs):
+        for hit in rs['hits']['hits']:
+            yield(hit["_source"])
+
 
     def match_search(self, kwargs):
         return self.search(dict(match=kwargs))
