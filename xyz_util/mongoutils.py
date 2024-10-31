@@ -2,6 +2,7 @@
 # author = 'denishuang'
 from __future__ import unicode_literals
 
+import datetime
 import os
 from .datautils import access, import_function
 from six import text_type
@@ -114,6 +115,10 @@ class Store(object):
         if not hasattr(rs, 'count'):
             setattr(rs, 'count', lambda: self.count(args[0]))
         return rs
+
+    def search(self, cond, *args, **kwargs):
+        cond = self.normalize_filter(cond)
+        return self.find(cond, *args, **kwargs)
 
     def upsert(self, cond, value, **kwargs):
         d = {'$set': value}
@@ -289,6 +294,48 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
     # print(d)
     return d
 
+def json_schema(d, prefix=''):
+    import bson
+    tm = {
+        int: 'integer',
+        bson.int64.Int64: 'integer',
+        ObjectId: 'oid',
+        float: 'number',
+        bool: 'boolean',
+        list: 'array',
+        text_type: 'string',
+        type(None): 'null',
+        dict: 'object'
+    }
+    r = {}
+    for k, v in d.items():
+        t = tm[type(v)]
+        fn = '%s%s' % (prefix, k)
+        r[fn] = t
+        if t == 'object':
+            r.update(json_schema(v, prefix='%s.' % fn))
+    return r
+
+
+def filed_type_func(f):
+    import json
+    return {
+        'integer': int,
+        'number': float,
+        'datetime': datetime.datetime.isoformat,
+        'date': datetime.datetime.isoformat,
+        'object': json.loads,
+        'oid': ObjectId
+    }.get(f, text_type)
+
+def all_fields_type_func(fs):
+    return dict([(fn, filed_type_func(ft)) for fn, ft in fs.items()])
+
+def drop_id_field(c):
+    for a in c:
+        a.pop('_id', None)
+        yield a
+
 
 class Schema(Store):
     name = 'XYZ_STORE_SCHEMA'
@@ -333,10 +380,6 @@ if USING_DJANGO:
         max_page_size = 1000
 
 
-    def drop_id_field(c):
-        for a in c:
-            a.pop('_id', None)
-            yield a
 
 
     def get_paginated_response(view, query, wrap=lambda a: a):
@@ -487,40 +530,6 @@ if USING_DJANGO:
             return self.update(request, pk, *args, **kargs)
 
 
-    def filed_type_func(f):
-        import json
-        return {
-            'integer': int,
-            'number': float,
-            'object': json.loads,
-            'oid': ObjectId
-        }.get(f, text_type)
-
-    def all_fields_type_func(fs):
-        return dict([(fn, filed_type_func(ft)) for fn, ft in fs.items()])
-
-
-    def json_schema(d, prefix=''):
-        import bson
-        tm = {
-            int: 'integer',
-            bson.int64.Int64: 'integer',
-            ObjectId: 'oid',
-            float: 'number',
-            bool: 'boolean',
-            list: 'array',
-            text_type: 'string',
-            type(None): 'null',
-            dict: 'object'
-        }
-        r = {}
-        for k, v in d.items():
-            t = tm[type(v)]
-            fn = '%s%s' % (prefix, k)
-            r[fn] = t
-            if t == 'object':
-                r.update(json_schema(v, prefix='%s.' % fn))
-        return r
 
 
     #
