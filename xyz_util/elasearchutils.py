@@ -5,9 +5,7 @@ from elasticsearch import Elasticsearch
 import os
 
 ES_SERVER = os.getenv('ES_SERVER', 'http://localhost:9200')
-ES_USER = os.getenv('ES_USER', 'elastic')
-ES_PASSWORD = os.getenv('ES_PASSWORD', 'elastic')
-
+ES_APIKEY = os.getenv('ES_APIKEY')
 
 class ESStore():
     index_name = None
@@ -17,13 +15,15 @@ class ESStore():
             self,
             index_name=None,
             server=ES_SERVER,
-            user=ES_USER,
-            password=ES_PASSWORD
+            **kwargs
     ):
         # print('ES_SERVER:', server)
         if index_name:
             self.index_name = index_name
-        self.es = Elasticsearch(server, basic_auth=(user, password))
+        config = dict(**kwargs)
+        if ES_APIKEY and 'api_key' not in config:
+            config['api_key'] = ES_APIKEY
+        self.es = Elasticsearch(server, **config)
         self.create_index()
 
     def create_index(self):
@@ -36,7 +36,7 @@ class ESStore():
 
     def get(self, id):
         return self.es.get(
-            index=self.name,
+            index=self.index_name,
             id=id
         )
 
