@@ -82,6 +82,17 @@ class Store(object):
         self.collection = getattr(self.db, name or self.name)
         if name:
             self.name = name
+        self._normalize_field_type_map()
+        
+    def _normalize_field_type_map(self):
+        self.field_type_map = fts = {}
+        if not self.field_types:
+            return
+        for ft, fns in self.field_types.items():
+            for fn in fns:
+                if isinstance(ft, str):
+                    ft = filed_type_func(ft)
+                fts[fn] = ft
 
     def random_get(self, *args, **kwargs):
         rs = list(self.random_find(args[0], count=1, **kwargs))
@@ -151,6 +162,7 @@ class Store(object):
         self.collection.update_many(cond, {'$addToSet': value}, upsert=True)
 
     def count(self, filter=None, distinct=False):
+        filter = self.normalize_filter(filter)
         if distinct:
             gs = []
             if filter:
@@ -165,6 +177,7 @@ class Store(object):
         return self.collection.count_documents(filter)
 
     def sum(self, field, filter=None):
+        filter = self.normalize_filter(filter)
         gs = []
         if filter:
             gs.append({'$match': filter})
@@ -173,6 +186,7 @@ class Store(object):
             return a['result']
 
     def count_by(self, field, filter=None, output='array', unwind=False):
+        filter = self.normalize_filter(filter)
         ps = []
         if filter:
             ps.append({'$match': filter})
@@ -185,6 +199,7 @@ class Store(object):
         return rs
 
     def group_by(self, field, aggregate={'count': {'$sum': 1}}, filter=None, output='array', unwind=False, prepare=[]):
+        filter = self.normalize_filter(filter)
         ps = []+ prepare
         if filter:
             ps.append({'$match': filter})
@@ -210,16 +225,16 @@ class Store(object):
         return d
 
     def normalize_filter(self, data):
+        if not data:
+            return data
         fs = self.fields
         fts = {}
         if not fs:
             sc = Schema().desc(self.name)
             fs = sc.get('guess')
             fts = all_fields_type_func(fs)
-        if self.field_types:
-            for ft, fns in self.field_types.items():
-                for fn in fns:
-                    fts[fn] = ft
+        if self.field_type_map:
+            fts.update(self.field_type_map)
         return normalize_filter_condition(data, fts, fs, self.search_fields)
 
     def create_index(self):
@@ -305,7 +320,8 @@ def json_schema(d, prefix=''):
         list: 'array',
         text_type: 'string',
         type(None): 'null',
-        dict: 'object'
+        dict: 'object',
+        datetime.datetime: 'datetime'
     }
     r = {}
     for k, v in d.items():
@@ -322,8 +338,8 @@ def filed_type_func(f):
     return {
         'integer': int,
         'number': float,
-        'datetime': datetime.datetime.isoformat,
-        'date': datetime.datetime.isoformat,
+        'datetime': datetime.datetime.fromisoformat,
+        'date': datetime.datetime.fromisoformat,
         'object': json.loads,
         'oid': ObjectId
     }.get(f, text_type)
