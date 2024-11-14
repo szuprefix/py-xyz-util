@@ -1,16 +1,20 @@
 # -*- coding:utf-8 -*- 
 # author = 'denishuang'
 from __future__ import unicode_literals
+from functools import cached_property
+import datetime, json
+import os, re
 
-import datetime
-import os
 from .datautils import access, import_function
 from six import text_type
 from bson import json_util, ObjectId
 from bson.objectid import ObjectId
 
-SERVER = 'mongodb://%s' % (os.getenv('MONGO_SERVER', 'localhost:27017'))
-DB = os.getenv('MONGO_DB') or os.path.basename(os.getcwd())
+SERVER = os.getenv('MONGO_SERVER', 'localhost:27017')
+if not SERVER.startswith('mongodb://'):
+    SERVER = f'mongodb://{SERVER}'
+CONN = SERVER.replace('mongodb://', '')
+DB = os.getenv('MONGO_DB') or ('/' in CONN and CONN.split('/')[1]) or os.path.basename(os.getcwd())
 TIMEOUT = 3000
 
 USING_DJANGO = os.getenv('DJANGO_SETTINGS_MODULE')
@@ -82,17 +86,27 @@ class Store(object):
         self.collection = getattr(self.db, name or self.name)
         if name:
             self.name = name
-        self._normalize_field_type_map()
-        
-    def _normalize_field_type_map(self):
-        self.field_type_map = fts = {}
+
+    @cached_property
+    def _field_type_map(self):
+        fts = all_fields_type_func(self._fields)
         if not self.field_types:
-            return
+            return fts
         for ft, fns in self.field_types.items():
             for fn in fns:
                 if isinstance(ft, str):
                     ft = filed_type_func(ft)
                 fts[fn] = ft
+        return fts
+
+    @cached_property
+    def _fields(self):
+        fs = {}
+        for d in self.random_find(count=10):
+            fs.update(json_schema(d))
+        if self.fields and isinstance(self.fields, dict):
+            fs.update(self.fields)
+        return fs
 
     def random_get(self, *args, **kwargs):
         rs = list(self.random_find(args[0], count=1, **kwargs))
@@ -101,6 +115,8 @@ class Store(object):
     def get(self, cond):
         if isinstance(cond, text_type):
             cond = {'_id': ObjectId(cond)}
+        else:
+            cond = self.normalize_filter(cond)
         return self.collection.find_one(cond)
 
     def get_or_create(self, cond, defaults={}):
@@ -114,21 +130,23 @@ class Store(object):
         return a
 
     def random_find(self, cond={}, count=10, fields=None):
+        cond = self.normalize_filter(cond)
         fs = [{'$match': cond}, {'$sample': {'size': count}}]
         if fields:
             fs.append({'$project': fields})
         return self.collection.aggregate(fs)
 
-    def find(self, *args, **kwargs):
+    def find(self, cond, *args, **kwargs):
+        cond = self.normalize_filter(cond)
         if self.ordering and 'sort' not in kwargs:
             kwargs['sort'] = [django_order_field_to_mongo_sort(s) for s in self.ordering]
-        rs = self.collection.find(*args, **kwargs)
+        rs = self.collection.find(cond, *args, **kwargs)
         if not hasattr(rs, 'count'):
             setattr(rs, 'count', lambda: self.count(args[0]))
         return rs
 
     def search(self, cond, *args, **kwargs):
-        cond = self.normalize_filter(cond)
+        # cond = self.normalize_filter(cond)
         return self.find(cond, *args, **kwargs)
 
     def upsert(self, cond, value, **kwargs):
@@ -214,7 +232,7 @@ class Store(object):
     def clean_data(self, data):
         d = {}
         for a in data.keys():
-            if self.fields and a not in self.fields:
+            if self._fields and a not in self._fields:
                 continue
             d[a] = data[a]
 
@@ -227,15 +245,7 @@ class Store(object):
     def normalize_filter(self, data):
         if not data:
             return data
-        fs = self.fields
-        fts = {}
-        if not fs:
-            sc = Schema().desc(self.name)
-            fs = sc.get('guess')
-            fts = all_fields_type_func(fs)
-        if self.field_type_map:
-            fts.update(self.field_type_map)
-        return normalize_filter_condition(data, fts, fs, self.search_fields)
+        return normalize_filter_condition(data, self._field_type_map, self._fields , self.search_fields)
 
     def create_index(self):
         for i in self.keys:
@@ -273,6 +283,7 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
         'all': lambda v: {'$all': v.split(',')},
         'gt': lambda v: {'$gt': v},
         'lt': lambda v: {'$lt': v},
+        'size': lambda v: {'$size': v},
         'gte': lambda v: {'$gte': v},
         'lte': lambda v: {'$lte': v},
     }
@@ -291,9 +302,9 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
                 v = mf(v)
                 break
         if fields:
-            ps = a.split('__')
-            if ps[0] not in fields:
-                continue
+            ps = re.split(r'__|\.', a) ##a.split('__')
+            # if ps[0] not in fields:
+            #     continue
             a = ".".join(ps)
         format_func = field_types.get(a)
         expr = format_func(v) if not isinstance(v, dict) and format_func else v
@@ -334,7 +345,6 @@ def json_schema(d, prefix=''):
 
 
 def filed_type_func(f):
-    import json
     return {
         'integer': int,
         'number': float,
