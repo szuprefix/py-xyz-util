@@ -276,7 +276,7 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
                 d = {'$or': [d, {fn: v}]} if d else {fn: v}
 
     mm = {
-        'exists': lambda v: {'$exists': v not in ['0', 'false']},
+        'exists': lambda v: {'$exists': v not in ['0', 'false', False]},
         'isnull': lambda v: {'$ne' if v in ['0', 'false', ''] else '$eq': None},
         'regex': lambda v: {'$regex': v},
         'in': lambda v: {'$in': v.split(',')},
@@ -291,21 +291,36 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
         if a == 'search':
             continue
         v = data[a]
-        for mn, mf in mm.items():
-            ms = '__%s' % mn
-            if a.endswith(ms):
-                sl = len(ms)
+        ps = a.split('__')
+        if len(ps)>1:
+            mn = ps[-1]
+            mf = mm.get(mn)
+            if mf:
+                sl = len(mn)+2
                 a = a[:-sl]
-                format_func = field_types.get(a)
-                if format_func:
-                    v = format_func(v)
+                a = a.replace('__', '.')
+                if isinstance(v, str):
+                    format_func = field_types.get(a)
+                    if format_func:
+                        v = format_func(v)
                 v = mf(v)
-                break
-        if fields:
-            ps = re.split(r'__|\.', a) ##a.split('__')
-            # if ps[0] not in fields:
-            #     continue
-            a = ".".join(ps)
+
+        # for mn, mf in mm.items():
+        #     ms = f'__{mn}'
+        #     if a.endswith(ms):
+        #         sl = len(ms)
+        #         a = a[:-sl]
+        #         format_func = field_types.get(a)
+        #         if format_func:
+        #             v = format_func(v)
+        #         v = mf(v)
+        #         break
+        # if fields:
+        #     ps = re.split(r'__|\.', a) ##a.split('__')
+        #     # if ps[0] not in fields:
+        #     #     continue
+        #     a = ".".join(ps)
+        a = a.replace('__', '.')
         format_func = field_types.get(a)
         expr = format_func(v) if not isinstance(v, dict) and format_func else v
         if a in d and isinstance(d[a], dict):
