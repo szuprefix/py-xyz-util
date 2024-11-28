@@ -136,13 +136,13 @@ class Store(object):
             fs.append({'$project': fields})
         return self.collection.aggregate(fs)
 
-    def find(self, cond, *args, **kwargs):
-        cond = self.normalize_filter(cond)
+    def find(self, filter=None, projection=None, **kwargs):
+        filter = self.normalize_filter(filter)
         if self.ordering and 'sort' not in kwargs:
             kwargs['sort'] = [django_order_field_to_mongo_sort(s) for s in self.ordering]
-        rs = self.collection.find(cond, *args, **kwargs)
+        rs = self.collection.find(filter, projection,  **kwargs)
         if not hasattr(rs, 'count'):
-            setattr(rs, 'count', lambda: self.count(args[0]))
+            setattr(rs, 'count', lambda: self.count(filter))
         return rs
 
     def search(self, cond, *args, **kwargs):
@@ -265,6 +265,11 @@ class Store(object):
         return d
 
 
+def ensure_list(a):
+    if isinstance(a, str):
+        return a.split(',')
+    return a
+    
 
 def normalize_filter_condition(data, field_types={}, fields=None, search_fields=[]):
     d = {}
@@ -279,8 +284,8 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
         'exists': lambda v: {'$exists': v not in ['0', 'false', False]},
         'isnull': lambda v: {'$ne' if v in ['0', 'false', ''] else '$eq': None},
         'regex': lambda v: {'$regex': v},
-        'in': lambda v: {'$in': v.split(',')},
-        'all': lambda v: {'$all': v.split(',')},
+        'in': lambda v: {'$in': ensure_list(v)},
+        'all': lambda v: {'$all': ensure_list(v)},
         'gt': lambda v: {'$gt': v},
         'lt': lambda v: {'$lt': v},
         'size': lambda v: {'$size': v},
