@@ -72,6 +72,15 @@ def mongo_id_value(id):
     if isinstance(id, dict) and '$oid' in id:
         return id['$oid']
 
+def date_format(date_field, format='%Y-%m-%d'):
+    return {
+        '$dateToString': { 'format': format, 'date': f"${date_field}" }
+      }
+
+def str_left(date_field, left=10):
+    return {
+        '$substr': [f"${date_field}", 0, left]
+    }
 
 class Store(object):
     name = 'test_mongo_store'
@@ -210,20 +219,22 @@ class Store(object):
             ps.append({'$match': filter})
         if unwind:
             ps.append({'$unwind': '$%s' % field})
-        ps.append({'$group': {'_id': '$%s' % field, 'count': {'$sum': 1}}})
+        exp = '$%s' % field if isinstance(field, str) else field
+        ps.append({'$group': {'_id': exp, 'count': {'$sum': 1}}})
         rs = self.collection.aggregate(ps)
         if output == 'dict':
             rs = dict([(a['_id'], a['count']) for a in rs])
         return rs
 
-    def group_by(self, field, aggregate={'count': {'$sum': 1}}, filter=None, output='array', unwind=False, prepare=[]):
+    def group_by(self, field, aggregate={'count': {'$sum': 1}}, filter=None, unwind=False, prepare=[]):
         filter = self.normalize_filter(filter)
         ps = []+ prepare
         if filter:
             ps.append({'$match': filter})
         if unwind:
             ps.append({'$unwind': '$%s' % field})
-        d = {'_id': '$%s' % field}
+        exp = '$%s' % field if isinstance(field, str) else field
+        d = {'_id': exp}
         d.update(aggregate)
         ps.append({'$group': d})
         rs = self.collection.aggregate(ps)
