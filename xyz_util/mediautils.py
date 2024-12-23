@@ -2,14 +2,15 @@
 # author = 'denishuang'
 from __future__ import unicode_literals
 import subprocess
-import os
+import os, re
 
-FFMPEG = os.environ.get('FFMPEG', "ffmpeg")
+FFMPEG = os.getenv('FFMPEG', "ffmpeg")
 
+RE_SIZE = re.compile('(\d+)x(\d+)')
 
 class Transformer(object):
 
-    def __init__(self, cmd='ffmpeg'):
+    def __init__(self, cmd=FFMPEG):
         self.cmd = cmd
 
     def execute(self, *args, **kwargs):
@@ -36,10 +37,13 @@ class Transformer(object):
                     elif '[SAR' in st:
                         w, h = ps[0].split('x')
                         d['w'], d['h'] = int(w), int(h)
+                    else:
+                        m = RE_SIZE.search(st)
+                        if m:
+                            d['w'], d['h'] = int(m.group(1)), int(m.group(2))
                 if 'w' not in d and 'x' in sts[2]:
                     w, h = sts[2].strip().split(' ')[0].split('x')
                     d['w'], d['h'] = int(w), int(h)
-
         return d
 
     def save(self, src_path, *args, **kwargs):
