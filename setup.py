@@ -3,7 +3,7 @@ from __future__ import print_function
 from setuptools import setup, find_packages
 setup(
     name="xyz-util",
-    version="1.2.13",
+    version="1.2.14",
     author="szuprefix",
     author_email="szuprefix@126.com",
     description="common utils",

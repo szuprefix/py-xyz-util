@@ -175,6 +175,7 @@ class Store(object):
         return i + 1
 
     def update(self, cond, value, **kwargs):
+        cond = self.normalize_filter(cond)
         d = {}
         if value:
             d['$set'] = value
@@ -183,9 +184,11 @@ class Store(object):
         return self.collection.update_many(cond, d)
 
     def inc(self, cond, value):
+        cond = self.normalize_filter(cond)
         self.collection.update_many(cond, {'$inc': value}, upsert=True)
 
     def add_to_set(self, cond, value):
+        cond = self.normalize_filter(cond)
         self.collection.update_many(cond, {'$addToSet': value}, upsert=True)
 
     def count(self, filter=None, distinct=False):
@@ -296,9 +299,12 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
         'isnull': lambda v: {'$ne' if v in ['0', 'false', ''] else '$eq': None},
         'regex': lambda v: {'$regex': v},
         'in': lambda v: {'$in': ensure_list(v)},
+        'nin': lambda v: {'$nin': ensure_list(v)},
         'all': lambda v: {'$all': ensure_list(v)},
         'gt': lambda v: {'$gt': v},
         'lt': lambda v: {'$lt': v},
+        'ne': lambda v: {'$ne': v},
+        'eq': lambda v: {'$eq': v},
         'size': lambda v: {'$size': v},
         'gte': lambda v: {'$gte': v},
         'lte': lambda v: {'$lte': v},
