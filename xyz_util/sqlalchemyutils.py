@@ -32,6 +32,13 @@ def model_clean(model, rd):
     d = {key: value for key, value in rd.items() if key in allowed_fields}
     return d
 
+class ContextExists:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
+
 
 class FlaskDB:
 
@@ -39,15 +46,21 @@ class FlaskDB:
         self.app = app
         self.db = flask_db(app)
 
+    def ensure_context(self):
+        from flask import has_app_context
+        if has_app_context():
+            return ContextExists()
+        return self.app.app_context()
+
     def query(self, sql):
         from sqlalchemy import text
-        with self.app.app_context():
+        with self.ensure_context():
             result = self.db.session.execute(text(sql))
         return [dict(zip(result.keys(),row)) for row in result]
 
     def execute(self, sql):
         from sqlalchemy import text
-        with self.app.app_context():
+        with self.ensure_context():
             self.db.session.execute(text(sql))
             self.db.session.commit()
 
@@ -60,7 +73,7 @@ class FlaskDB:
             base, table_name = ps
             print(f'reflect_model: {base} {table_name}')
 
-        with self.app.app_context():
+        with self.ensure_context():
             # 获取正确的引擎或元数据对象
             bind_engine = db.get_engine(base) if base else db.engine
             metadata = db.metadatas[base] if base else db.MetaData()
@@ -83,7 +96,7 @@ class FlaskDB:
         - defaults: 要更新或创建的默认字段值（字典形式）
         - kwargs: 用于查找的条件（通常是唯一标识）
         """
-        with self.app.app_context():
+        with self.ensure_context():
             db = self.db
             if isinstance(model, str):
                 model = self.reflect_model(model)
