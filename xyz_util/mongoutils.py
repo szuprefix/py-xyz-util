@@ -278,6 +278,11 @@ class Store(object):
             d[kn] = Store(name=sn).get(id)
         return d
 
+    def change_field_type(self, type_map, filter={}):
+        cond = self.normalize_filter(filter)
+        ps = [{'$set': {k:{f'${v}': f'${k}'}}} for k, v in type_map.items()]
+        return self.collection.update_many(cond, ps)
+
 
 def ensure_list(a):
     if isinstance(a, str):
