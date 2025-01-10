@@ -308,6 +308,7 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
         'size': lambda v: {'$size': v},
         'gte': lambda v: {'$gte': v},
         'lte': lambda v: {'$lte': v},
+        'type': lambda v: {'$type': v},
     }
     for a in data.keys():
         if a == 'search':
