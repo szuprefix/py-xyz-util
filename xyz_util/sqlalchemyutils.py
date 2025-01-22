@@ -17,7 +17,11 @@ def flask_db(app, env_name='CONN'):
         binds = {}
         binds[dfdb] = uri
         for a in DBS:
-            binds[a] = uri.replace(f'/{dfdb}?', f'/{a}?')
+            if '@' in a:
+                dfdb, _, conn = a.partition('->')
+                binds[dfdb.strip()] = f'mysql+pymysql://{conn.strip()}'
+            else:
+                binds[a] = uri.replace(f'/{dfdb}?', f'/{a}?')
         app.config['SQLALCHEMY_BINDS'] = binds
 
     from flask_sqlalchemy import SQLAlchemy
@@ -122,6 +126,29 @@ class FlaskDB:
                 db.session.commit()  # 提交新记录
 
             return as_dict(instance)
+
+def normalize_filter(model, filter):
+    from sqlalchemy import and_, or_
+    filters = []
+    for key, value in filter.items():
+        field_name, _, op = key.partition('__')
+        if op == 'gt':
+            filters.append(getattr(model, field_name) > value)
+        elif op == 'gte':
+            filters.append(getattr(model, field_name) >= value)
+        elif op == 'lt':
+            filters.append(getattr(model, field_name) < value)
+        elif op == 'lte':
+            filters.append(getattr(model, field_name) <= value)
+        elif op == 'ne':
+            filters.append(getattr(model, field_name) != value)
+        elif op == 'in':
+            filters.append(getattr(model, field_name).in_(value))
+        else:
+            # 默认是等于
+            filters.append(getattr(model, field_name) == value)
+
+    return and_(True, *filters)
 
 def as_dict(model_instance, follow=None):
     if model_instance is None:
