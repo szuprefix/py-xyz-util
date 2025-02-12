@@ -58,7 +58,7 @@ def regex_contains(s):
     return {'$regex': ns}
 
 
-def django_order_field_to_mongo_sort(s):
+def ordering_to_sort(s):
     d = 1
     if s.startswith('-'):
         d = -1
@@ -147,8 +147,13 @@ class Store(object):
 
     def find(self, filter=None, projection=None, **kwargs):
         filter = self.normalize_filter(filter)
-        if self.ordering and 'sort' not in kwargs:
-            kwargs['sort'] = [django_order_field_to_mongo_sort(s) for s in self.ordering]
+        if 'sort' not in kwargs:
+            ordering = kwargs.pop('ordering', self.ordering)
+            kwargs['sort'] = [ordering_to_sort(s) for s in ordering]
+        if isinstance(projection, (list, tuple, set)):
+            projection = dict([(a, 1) for a in projection])
+            if '_id' not in projection:
+                projection['_id'] = 0
         rs = self.collection.find(filter, projection,  **kwargs)
         if not hasattr(rs, 'count'):
             setattr(rs, 'count', lambda: self.count(filter))
@@ -215,16 +220,8 @@ class Store(object):
         for a in self.collection.aggregate(gs):
             return a['result']
 
-    def count_by(self, field, filter=None, output='array', unwind=False):
-        filter = self.normalize_filter(filter)
-        ps = []
-        if filter:
-            ps.append({'$match': filter})
-        if unwind:
-            ps.append({'$unwind': '$%s' % field})
-        exp = '$%s' % field if isinstance(field, str) else field
-        ps.append({'$group': {'_id': exp, 'count': {'$sum': 1}}})
-        rs = self.collection.aggregate(ps)
+    def count_by(self, field, filter=None, output='dict', unwind=False):
+        rs = self.group_by(field, filter=filter, unwind=unwind)
         if output == 'dict':
             rs = dict([(a['_id'], a['count']) for a in rs])
         return rs
@@ -259,7 +256,7 @@ class Store(object):
     def normalize_filter(self, data):
         if not data:
             return data
-        return normalize_filter_condition(data, self._field_type_map, self._fields , self.search_fields)
+        return normalize_filter_condition(data, {}, self._fields , self.search_fields) # self._field_type_map
 
     def create_index(self):
         for i in self.keys:
@@ -556,7 +553,7 @@ if USING_DJANGO:
             ordering = qps.get('ordering')
             kwargs = {}
             if ordering:
-                kwargs['sort'] = [django_order_field_to_mongo_sort(ordering)]
+                kwargs['sort'] = [ordering_to_sort(ordering)]
             if randc:
                 rs = self.store.random_find(cond, count=int(randc), fields=self.get_serialize_fields())
                 return response.Response(dict(results=json_util._json_convert(rs)))

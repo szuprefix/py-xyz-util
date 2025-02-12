@@ -56,7 +56,7 @@ class FC():
         return self.client.invoke_function_with_options(function_name, req, headers, RuntimeOptions())
 
     def post_async(self, event, data={}, **kwargs):
-        self.invoke(type='Async', body=json.dumps(dict(event=event, kwargs=data)), **kwargs)
+        return self.invoke(type='Async', body=json.dumps(dict(event=event, kwargs=data)), **kwargs)
 
     def post(self, event, data, **kwargs):
         rs = self.invoke(body=json.dumps(dict(event=event, kwargs=data)), **kwargs)
