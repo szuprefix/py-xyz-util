@@ -253,10 +253,13 @@ class Store(object):
                     d[f] = t(d[f])
         return d
 
-    def normalize_filter(self, data):
+    def normalize_filter(self, data, cast=False):
         if not data:
             return data
-        return normalize_filter_condition(data, {}, self._fields , self.search_fields) # self._field_type_map
+        fs = self._fields if cast else None
+        fm = self._field_type_map if cast else {}
+        # print(fm, fs)
+        return normalize_filter_condition(data, fm , fs, self.search_fields) #
 
     def create_index(self):
         for i in self.keys:
@@ -340,11 +343,11 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
         #             v = format_func(v)
         #         v = mf(v)
         #         break
-        # if fields:
-        #     ps = re.split(r'__|\.', a) ##a.split('__')
-        #     # if ps[0] not in fields:
-        #     #     continue
-        #     a = ".".join(ps)
+        if fields:
+            ps = re.split(r'__|\.', a) ##a.split('__')
+            if ps[0] not in fields:
+                continue
+            a = ".".join(ps)
         a = a.replace('__', '.')
         format_func = field_types.get(a)
         expr = format_func(v) if not isinstance(v, dict) and format_func else v
