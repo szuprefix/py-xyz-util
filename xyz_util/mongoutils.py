@@ -233,8 +233,15 @@ class Store(object):
             ps.append({'$match': filter})
         if unwind:
             ps.append({'$unwind': '$%s' % field})
-        exp = '$%s' % field if isinstance(field, str) else field
+        if isinstance(field, str):
+            exp = '$%s' % field
+        elif isinstance(field, (list,tuple)):
+            exp= dict([(f, f'${f}') for f in field])
+        else:
+            exp = field
         d = {'_id': exp}
+        if isinstance(aggregate, (list, tuple)):
+            aggregate = dict([(f, {'$sum': f'${f}'}) for f in aggregate])
         d.update(aggregate)
         ps.append({'$group': d})
         rs = self.collection.aggregate(ps)

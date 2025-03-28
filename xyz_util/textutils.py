@@ -33,6 +33,21 @@ class Splitter(object):
                 d['items'].append(p)
         return d
 
+class FitSplitter(object):
+    def __init__(self, s):
+        self.rexpr = re.compile(s)
+
+    def __call__(self, s):
+        d = dict(head='', items=[], splitters=[])
+        for i, p in enumerate(self.rexpr.split(s)):
+            if i == 0:
+                d['head'] = p
+            elif i % 2 == 1:
+                d['splitters'].append(p)
+            else:
+                d['items'].append(p)
+        return d
+
 
 def hierarchy(s, spliters):
     if not spliters:
@@ -83,3 +98,29 @@ class TreeNode(object):
         for a in self.items:
             ds+= a.to_array(parent=self.name)
         return ds
+
+
+import re
+from typing import Dict, List, Pattern, Union
+
+
+def splitter(pattern: Union[str, Pattern[str]]):
+    compiled_re = re.compile(pattern) if isinstance(pattern, str) else pattern
+
+    def split_fn(s: str) -> Dict[str, Union[str, List[str]]]:
+        ps = compiled_re.split(s)
+        rs = ps[1:]
+        return {
+            "head": ps[0],
+            "items": [rs[i] for i in range(len(rs)) if i % 2 == 1],
+            "splitters": [rs[i] for i in range(len(rs)) if i % 2 == 0]
+        }
+
+    return split_fn
+
+
+def groups(d: Dict[str, Union[str, List[str]]]) -> Dict[str, Union[str, List[Dict[str, str]]]]:
+    return {
+        "head": d["head"],
+        "items": [{"label": d["splitters"][i], "text": a} for i, a in enumerate(d["items"])]
+    }
