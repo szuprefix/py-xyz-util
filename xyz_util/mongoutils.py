@@ -334,11 +334,16 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
                 sl = len(mn)+2
                 a = a[:-sl]
                 a = a.replace('__', '.')
+                is_not = a.endswith('.not')
+                if is_not:
+                    a=a[:-4]
                 if isinstance(v, str):
                     format_func = field_types.get(a)
                     if format_func:
                         v = format_func(v)
                 v = mf(v)
+                if is_not:
+                    v = {'$not': v}
 
         # for mn, mf in mm.items():
         #     ms = f'__{mn}'
