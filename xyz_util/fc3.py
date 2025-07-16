@@ -60,7 +60,12 @@ class FC():
 
     def post(self, event, data, **kwargs):
         rs = self.invoke(body=json.dumps(dict(event=event, kwargs=data)), **kwargs)
-        return json.loads(rs.body.read())
+        s = rs.body.read()
+        if isinstance(s, bytes):
+            s = s.decode()
+        if rs.headers['content-type'] == 'application/json':
+            return json.loads(s)
+        return s
 
     def get_http_trigger_url(self, function_name, **kwargs):
         from alibabacloud_fc20230330.models import ListTriggersRequest
