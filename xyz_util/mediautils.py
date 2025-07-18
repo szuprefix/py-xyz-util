@@ -52,6 +52,11 @@ class Transformer(object):
     def crop(self, src_path, dest_path, w=0, h=0, x=0, y=0, **kwargs):
         return self.save(src_path, '-vf', f'crop={w}:{h}:{x}:{y}', dest_path, **kwargs)
 
+    def center_crop(self, src_path, dest_path, size='9:16', **kwargs):
+        s = size.replace(':', '/')
+        return self.save(src_path, '-vf', f'crop=in_h*{s}:in_h:(in_w-in_h*{s})/2:0', dest_path, **kwargs)
+
+
     def video_to_images(self, video_path, output_dir, fps=6, file_name_template='%05d.png', **kwargs):
         return self.execute('-i', video_path, '-r', f'{fps}', '-f', 'image2', f'{output_dir}/{file_name_template}',
                             **kwargs)
