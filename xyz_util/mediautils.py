@@ -57,6 +57,24 @@ class Transformer(object):
         return self.save(src_path, '-vf', f'crop=in_h*{s}:in_h:(in_w-in_h*{s})/2:0', dest_path, **kwargs)
 
 
+    def align(self, files):
+        if not files:
+            return
+        minl = None
+        for f in files:
+            d = self.probe(f['path'])
+            if not minl:
+                minl = d['duration']
+            elif d['duration']<minl:
+                minl = d['duration']
+            f['duration'] = d['duration']
+        rs = []
+        for f in files:
+            if f['duration']>minl:
+                self.save(f['path'], '-t', minl, f['new_path'])
+                rs.append(f)
+        return rs
+
     def video_to_images(self, video_path, output_dir, fps=6, file_name_template='%05d.png', **kwargs):
         return self.execute('-i', video_path, '-r', f'{fps}', '-f', 'image2', f'{output_dir}/{file_name_template}',
                             **kwargs)

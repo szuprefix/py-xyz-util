@@ -220,8 +220,8 @@ class Store(object):
         for a in self.collection.aggregate(gs):
             return a['result']
 
-    def count_by(self, field, filter=None, output='dict', unwind=False):
-        rs = self.group_by(field, filter=filter, unwind=unwind)
+    def count_by(self, field, output='dict', **kwargs):
+        rs = self.group_by(field, **kwargs)
         if output == 'dict':
             rs = dict([(a['_id'], a['count']) for a in rs])
         return rs

@@ -84,13 +84,13 @@ class FC():
         return instance
 
 
-def self_post_async(path, d):
-    try:
-        from flask import request
-        import requests
-        url = f'{request.host_url}{path}'
-        print(f'self_post_async:{url}')
-        return requests.post(url, json=d, headers={'x-fc-invocation-type': 'Async'})
-    except:
-        import traceback
-        logging.error(traceback.format_exc())
+# def self_post_async(path, d):
+#     try:
+#         from flask import request
+#         import requests
+#         url = f'{request.host_url}{path}'
+#         print(f'self_post_async:{url}')
+#         return requests.post(url, json=d, headers={'x-fc-invocation-type': 'Async'})
+#     except:
+#         import traceback
+#         logging.error(traceback.format_exc())
