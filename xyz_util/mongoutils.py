@@ -522,7 +522,7 @@ if USING_DJANGO:
             return rs
 
 
-    mongo_posted = Signal(providing_args=['table', 'instance', 'created', 'update'])
+    mongo_posted = Signal()
 
     class MongoViewSet(viewsets.ViewSet):
         permission_classes = [permissions.IsAdminUser]
