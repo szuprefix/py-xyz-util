@@ -32,7 +32,8 @@ class FC():
                  key_secret=os.getenv('ALIBABA_CLOUD_ACCESS_KEY_SECRET'),
                  token=os.getenv('ALIBABA_CLOUD_SECURITY_TOKEN'),
                  account_id=os.getenv('FC_ACCOUNT_ID'),
-                 region=os.getenv('FC_REGION', 'us-west-1')
+                 region=os.getenv('FC_REGION', 'us-west-1'),
+                 timeout=int(os.getenv('FC_TIMEOUT', 10000))
                  ):
         from alibabacloud_fc20230330.client import Client
         from alibabacloud_tea_openapi.models import Config
@@ -42,8 +43,8 @@ class FC():
             access_key_secret=key_secret,
             security_token=token,
             endpoint=f"{account_id}.{region}.fc.aliyuncs.com",
-            read_timeout=1000000,
-            connect_timeout=1000000
+            read_timeout=1000*timeout,
+            connect_timeout=1000*timeout
         )
 
         self.client = Client(config)
@@ -73,6 +74,10 @@ class FC():
         req = ListTriggersRequest(**kwargs)
         return self.client.list_triggers(function_name, req)
 
+    def get_async_task(self, tid, function_name=os.getenv('FC_FUNCTION_NAME'), **kwargs):
+        from alibabacloud_fc20230330.models import GetAsyncTaskRequest
+        req = GetAsyncTaskRequest(**kwargs)
+        return self.client.get_async_task(function_name, tid, req)
 
     @classmethod
     def get_instance(cls):
@@ -84,13 +89,3 @@ class FC():
         return instance
 
 
-# def self_post_async(path, d):
-#     try:
-#         from flask import request
-#         import requests
-#         url = f'{request.host_url}{path}'
-#         print(f'self_post_async:{url}')
-#         return requests.post(url, json=d, headers={'x-fc-invocation-type': 'Async'})
-#     except:
-#         import traceback
-#         logging.error(traceback.format_exc())

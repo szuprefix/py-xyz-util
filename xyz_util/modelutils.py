@@ -1,6 +1,9 @@
 # -*- coding:utf-8 -*-
 from __future__ import unicode_literals, print_function
+
+import copy
 from collections import OrderedDict
+from django.db import connections
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -327,7 +330,6 @@ def object2dict4display(obj, fields):
 
 def get_objects_accessor_data(accessors, content_type_id, object_ids):
     from django_tables2.utils import Accessor
-    from django.contrib.contenttypes.models import ContentType
     acs = [Accessor(a) for a in accessors]
     ct = ContentType.objects.get_for_id(content_type_id)
     for id in object_ids:
@@ -457,8 +459,73 @@ def get_model_field_verbose_name_map(m):
 def get_generic_related_objects(src_object, target_model):
     if isinstance(target_model, string_types):
         target_model = apps.get_model(target_model)
-    from django.contrib.contenttypes.models import ContentType
     ct = ContentType.objects.get_for_model(src_object)
     gfk = get_generic_foreign_key(target_model._meta)
     cond = {gfk.ct_field: ct, gfk.fk_field: src_object.pk}
     return target_model.objects.filter(**cond)
+
+class Transfer():
+
+    def __init__(self, source_name, conn_config={}):
+        self.source = source_name
+        d = copy.deepcopy(connections['default'].settings_dict)
+        d.pop('NAME', None)
+        d.update(conn_config)
+        if 'NAME' not in d:
+            d['NAME'] = source_name
+        from django.conf import settings
+        settings.DATABASES[source_name] = d
+
+    def normalize_model(self, model):
+        if isinstance(model, str):
+            app_label, model_name = model.split('.')
+            model = apps.get_model(app_label=app_label, model_name=model_name)
+        return model
+
+
+    def get_unique_keys(self, model):
+        model = self.normalize_model(model)
+        unique_together = model._meta.unique_together
+        if unique_together:
+            return unique_together[0]
+        unique_fields = [(1 if f.null else 2, f.name) for f in model._meta.fields if f.unique and not f.primary_key]
+        if not unique_fields:
+            return
+        unique_fields = sorted(unique_fields, reverse=True)
+        return [unique_fields[0][1]]
+
+    def get_query_set_paire(self, model):
+        return model.objects.using(self.source), model.objects.using('default')
+
+    def content_type_map(self, app, model):
+        ContentType.objects.using('default')
+
+    def map_difference(self, source_list, dest_list, by='common'):
+        ms = {}
+        md = {}
+        for a in source_list:
+            ms[tuple(a.values())[1:]] = a['id']
+        for a in dest_list:
+            md[tuple(a.values())[1:]] = a['id']
+        if by == 'common':
+            keys = ms.keys() & md.keys()
+        else:
+            keys = ms.keys() | md.keys()
+        return {ms[k]: md[k] for k in keys}
+
+    # def map_by_append(self):
+
+    def trans(self, model, key_fields=None):
+        model = self.normalize_model(model)
+        if not key_fields:
+            key_fields = self.get_unique_keys(model)
+            if not key_fields:
+                return
+        print(key_fields)
+        qs, qd = self.get_query_set_paire(model)
+        return self.map_difference(
+            qs.values('id', *key_fields),
+            qd.values('id', *key_fields)
+        )
+
+
