@@ -345,16 +345,7 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
                 if is_not:
                     v = {'$not': v}
 
-        # for mn, mf in mm.items():
-        #     ms = f'__{mn}'
-        #     if a.endswith(ms):
-        #         sl = len(ms)
-        #         a = a[:-sl]
-        #         format_func = field_types.get(a)
-        #         if format_func:
-        #             v = format_func(v)
-        #         v = mf(v)
-        #         break
+
         if fields:
             ps = re.split(r'__|\.', a) ##a.split('__')
             if ps[0] not in fields:
@@ -368,11 +359,7 @@ def normalize_filter_condition(data, field_types={}, fields=None, search_fields=
         else:
             d[a] = expr
 
-    # for t, fs in field_types.items():
-    #     for f in fs:
-    #         if f in d and not isinstance(d[f], dict):
-    #             d[f] = t(d[f])
-    # print(d)
+
     return d
 
 def json_schema(d, prefix=''):

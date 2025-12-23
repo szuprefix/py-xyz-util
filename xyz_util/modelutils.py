@@ -309,7 +309,7 @@ def get_object_accessor_value(record, accessor):
                 return display_fn()
         except models.FieldDoesNotExist:
             pass
-    from django_tables2.utils import A
+    from .datautils import A
     v = A(remainder).resolve(penultimate, quiet=True)
     if isinstance(v, Model):
         return text_type(v)
@@ -319,7 +319,7 @@ def get_object_accessor_value(record, accessor):
 
 
 def object2dict4display(obj, fields):
-    from django_tables2.utils import A
+    from .datautils import A
     return OrderedDict(
         [(f, {
             "name": f,
@@ -331,7 +331,7 @@ def object2dict4display(obj, fields):
 
 
 def get_objects_accessor_data(accessors, content_type_id, object_ids):
-    from django_tables2.utils import Accessor
+    from .datautils import Accessor
     acs = [Accessor(a) for a in accessors]
     ct = ContentType.objects.get_for_id(content_type_id)
     for id in object_ids:
@@ -532,7 +532,7 @@ def topological_sort(graph):
 
 class BaseTransfer():
 
-    def __init__(self, source_name, conn_config={}):
+    def __init__(self, source_name, conn_config={}, not_create_models=[]):
         self.source = source_name
         d = copy.deepcopy(connections['default'].settings_dict)
         d.pop('NAME', None)
@@ -543,6 +543,7 @@ class BaseTransfer():
         # settings.DATABASES[source_name] = d
         connections.databases[source_name] = d
         self.model_pk_map = {}
+        self.not_create_models = not_create_models
 
     def normalize_model(self, model):
         if isinstance(model, str):
@@ -557,10 +558,15 @@ class BaseTransfer():
         if unique_together:
             return unique_together[0]
         unique_fields = [(1 if f.null else 2, f.name) for f in model._meta.fields if f.unique and not f.primary_key]
-        if not unique_fields:
-            return
-        unique_fields = sorted(unique_fields, reverse=True)
-        return [unique_fields[0][1]]
+        if unique_fields:
+            unique_fields = sorted(unique_fields, reverse=True)
+            return [unique_fields[0][1]]
+        gf = get_generic_foreign_key(model)
+        nf = find_field(model, lambda f: f.name in ['name', 'title'])
+        if gf:
+            if nf:
+                return [gf.ct_field, gf.fk_field, nf.name]
+        return [nf.name]
 
     def get_query_set_pair(self, model):
         return model.objects.using(self.source), model.objects.using('default')
@@ -680,11 +686,14 @@ class BaseTransfer():
 #             print(f"⚠️ {model._meta.label}: {len(mismatched)} mismatches")
 
 class TransferOneByOne(BaseTransfer):
+
     def replace_obj_foreign_keys(self, obj):
         d = self.model2dict(obj)
         for f in obj._meta.fields:
             if f.is_relation:
                 rel_label = f.related_model._meta.label
+                if rel_label == 'contenttypes.ContentType':
+                    continue
                 rel_map = self.model_pk_map.setdefault(rel_label, {})
                 old_id = getattr(obj, f.attname)
                 new_id = rel_map.get(old_id)
@@ -696,23 +705,37 @@ class TransferOneByOne(BaseTransfer):
                     d[f.attname] = self.get_twin_id(rel_obj)
         return d
 
+    def replace_obj_generic_foreign_key(self, obj, d=None):
+        if not d:
+            d = self.model2dict(obj)
+        gf = get_generic_foreign_key(obj)
+        if not gf:
+            return d
+        gfo = getattr(obj, gf.name)
+        d[gf.fk_field] = self.get_twin_id(gfo)
+        d[f'{gf.ct_field}_id'] = self.get_twin_id(getattr(obj, gf.ct_field))
+        return d
+
     def get_twin_id(self, obj, uks=None):
         if obj is None:
             return
         if not uks:
             uks = self.get_unique_keys(obj)
         d = self.replace_obj_foreign_keys(obj)
+        self.replace_obj_generic_foreign_key(obj, d)
         qs, qd = self.get_query_set_pair(obj._meta.model)
         cond={}
         for f in obj._meta.fields:
             if f.name in uks:
                 cond[f.attname] = d[f.attname]
         print(f'{obj._meta.label} {obj.pk} by {cond}')
-        new_obj, created = qd.get_or_create(**cond, defaults=d)
-        if created:
+        new_obj=qd.filter(**cond).first()
+        if not new_obj and obj._meta.label not in self.not_create_models:
+            new_obj = qd.create(**d)
             print(f'{obj._meta.label} created: {new_obj}')
-        self.model_pk_map.setdefault(obj._meta.label, {})[obj.pk] = new_obj.pk
-        return new_obj.pk
+        if new_obj:
+            self.model_pk_map.setdefault(obj._meta.label, {})[obj.pk] = new_obj.pk
+            return new_obj.pk
 
 
     def model2dict(self, obj):
@@ -735,14 +758,26 @@ class TransferOneByOne(BaseTransfer):
             if idm.get(a.pk):
                 print('ignore', a.pk, 'exists')
                 continue
-            print(i, a.pk, self.get_twin_id(a), '\n')
+            try:
+                print(i, a.pk, self.get_twin_id(a), '\n')
+            except Exception as e:
+                print('\n# error', e, i, a.pk, '\n')
 
     def trans_relations(self, model, relations=[]):
-        pks = self.model_pk_map[model].keys()
-        mlabel = model if isinstance(model, str) else model._meta.label
+        model = self.normalize_model(model)
+        mlabel = model._meta.label
+        pks = self.model_pk_map[mlabel].keys()
         for rel in relations:
             rel_model = self.normalize_model(rel)
-            fn = find_field(rel_model, lambda f: f.is_relation and f.related_model._meta.label == mlabel).name
-            cond={f'{fn}__in': pks}
+            gf = get_generic_foreign_key(rel_model)
+            if gf:
+                ps = mlabel.split('.')
+                cond = {
+                    f'{gf.ct_field}_id': ContentType.objects.using('source').get(app_label=ps[0],model=ps[1]).id,
+                    f'{gf.fk_field}__in': pks
+                }
+            else:
+                fn = find_field(rel_model, lambda f: f.is_relation and f.related_model._meta.label == mlabel).name
+                cond={f'{fn}__in': pks}
             print(rel_model, cond)
             self.trans(rel_model, cond)
