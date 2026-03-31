@@ -1,4 +1,5 @@
 import os, logging, json
+from contextvars import ContextVar
 
 REGIONS = [
     'cn-hangzhou',
@@ -25,6 +26,17 @@ REGIONS = [
 CN_REGIONS = [a for a in REGIONS if a.startswith('cn-')]
 NCN_REGIONS = [a for a in REGIONS if not a.startswith('cn-')]
 
+_CTV = ContextVar('FC_CONTEXT_VAR')
+
+def set_common_headers(context, filter_prefix=os.getenv('FC3_FILTER_PREFIX', None)):
+    if filter_prefix:
+        context = dict([(k, v) for k,v in context.items() if k.startswith(filter_prefix)])
+    _CTV.set(context)
+    return context
+
+def get_common_headers():
+    return _CTV.get({})
+
 class FC():
 
     def __init__(self,
@@ -49,11 +61,16 @@ class FC():
 
         self.client = Client(config)
 
-    def invoke(self, function_name=os.getenv('FC_FUNCTION_NAME'), type='Sync', **kwargs):
+
+
+    def invoke(self, function_name=os.getenv('FC_FUNCTION_NAME'), type='Sync', pass_common_header_prefix=None, **kwargs):
         from alibabacloud_fc20230330.models import InvokeFunctionRequest, InvokeFunctionHeaders
         from alibabacloud_tea_util.models import RuntimeOptions
         req = InvokeFunctionRequest(**kwargs)
-        headers = InvokeFunctionHeaders(x_fc_invocation_type=type)
+        headers = InvokeFunctionHeaders(
+            common_headers=get_common_headers(),
+            x_fc_invocation_type=type
+        )
         return self.client.invoke_function_with_options(function_name, req, headers, RuntimeOptions())
 
     def post_async(self, event, data={}, **kwargs):
