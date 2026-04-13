@@ -2,7 +2,7 @@
 # author = 'denishuang'
 from __future__ import unicode_literals
 import subprocess
-import os, re
+import os, re, json
 
 FFMPEG = os.getenv('FFMPEG', "ffmpeg")
 
@@ -108,3 +108,36 @@ class Transformer(object):
             return self.execute(*inputs, '-filter_complex', f'{streams}concat=n={n}:v=1[v]{vf}', '-map', '[v]', output, **kwargs)
         return self.execute(*inputs, '-filter_complex', f'{streams}concat=n={n}:v=1:a=1[v][a]', '-map', '[v]', '-map',
                             '[a]', output, **kwargs)
+
+
+
+def meta(url=None):
+    args = [
+        "-v", "error",
+        "-v", "quiet",
+        "-analyzeduration", "0",
+        "-hide_banner",
+        "-probesize", "32768",
+        "-timeout", "5000000",
+        "-select_streams", "v:0",
+        "-show_entries", "format=duration,format_name,filename,size",
+        "-show_entries", "stream=width,height,codec_name,display_aspect_ratio",
+        "-of", "json", url
+    ]
+    rs = subprocess.run([FFMPEG.replace('ffmpeg', 'ffprobe')] + list(args), capture_output=True)
+    if rs.returncode == 0 and rs.stdout:
+        d = json.loads(rs.stdout)
+        stream = d.get("streams", [{}])[0]
+        format_info = d.get("format", {})
+
+        return {
+            "duration": float(format_info.get("duration", 0)) if format_info.get("duration") else None,
+            "width": stream.get("width"),
+            "height": stream.get("height"),
+            "size": int(format_info.get("size", 0)) if format_info.get("size") else None,
+            "codec": stream.get("codec_name"),
+            "filename": format_info.get("filename"),
+            "aspect_ratio": stream.get("display_aspect_ratio")
+        }
+
+    raise Exception(f"获取多媒体信息失败：{rs.stderr}")
