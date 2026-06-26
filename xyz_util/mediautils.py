@@ -121,7 +121,7 @@ def meta(url=None):
         "-timeout", "5000000",
         "-select_streams", "v:0",
         "-show_entries", "format=duration,format_name,filename,size",
-        "-show_entries", "stream=width,height,codec_name,display_aspect_ratio",
+        "-show_entries", "stream=width,height,codec_name,display_aspect_ratio,r_frame_rate",
         "-of", "json", url
     ]
     rs = subprocess.run([FFMPEG.replace('ffmpeg', 'ffprobe')] + list(args), capture_output=True)
@@ -129,7 +129,14 @@ def meta(url=None):
         d = json.loads(rs.stdout)
         stream = d.get("streams", [{}])[0]
         format_info = d.get("format", {})
-
+        fps_str = stream.get("r_frame_rate", "")
+        fps = None
+        if fps_str and "/" in fps_str:
+            num, den = fps_str.split("/", 1)
+            try:
+                fps = round(float(num) / float(den), 3)  # 保留3位小数
+            except (ValueError, ZeroDivisionError):
+                fps = None
         return {
             "duration": float(format_info.get("duration", 0)) if format_info.get("duration") else None,
             "width": stream.get("width"),
@@ -137,7 +144,8 @@ def meta(url=None):
             "size": int(format_info.get("size", 0)) if format_info.get("size") else None,
             "codec": stream.get("codec_name"),
             "filename": format_info.get("filename"),
-            "aspect_ratio": stream.get("display_aspect_ratio")
+            "aspect_ratio": stream.get("display_aspect_ratio"),
+            "fps": fps
         }
 
     raise Exception(f"获取多媒体信息失败：{rs.stderr}")

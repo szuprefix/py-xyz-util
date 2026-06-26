@@ -106,3 +106,23 @@ class FC():
         return instance
 
 
+    def list_domains(self, tail=None):
+        from alibabacloud_fc20230330 import models as fc_models
+        domains = []
+        next_token = None
+        while True:
+            req = fc_models.ListCustomDomainsRequest(
+                limit=100,
+                next_token=next_token
+            )
+            resp = self.client.list_custom_domains(req)
+            for d in resp.body.custom_domains:
+                domain = d.domain_name
+                if not tail or  domain.endswith(tail):
+                    domains.append(domain)
+
+            next_token = resp.body.next_token
+
+            if not next_token:
+                break
+        return domains
