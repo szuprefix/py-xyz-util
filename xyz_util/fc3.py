@@ -106,7 +106,7 @@ class FC():
         return instance
 
 
-    def list_domains(self, tail=None):
+    def list_domains(self, tail=None, https_only=False):
         from alibabacloud_fc20230330 import models as fc_models
         domains = []
         next_token = None
@@ -118,12 +118,14 @@ class FC():
             resp = self.client.list_custom_domains(req)
             for d in resp.body.custom_domains:
                 domain = d.domain_name
-                if not tail or  domain.endswith(tail):
-                    domains.append(domain)
+                if tail and not domain.endswith(tail):
+                    continue
+                if https_only and not d.cert_config:
+                    continue
+                domains.append(domain)
 
             next_token = resp.body.next_token
 
             if not next_token:
                 break
         return domains
-
