@@ -84,7 +84,7 @@ class FlaskDB:
 
         with self.ensure_context():
             # 获取正确的引擎或元数据对象
-            bind_engine = db.get_engine(base) if base else db.engine
+            bind_engine = db.engines[base] if base else db.engine
             metadata = db.metadatas[base] if base else db.MetaData()
 
             # 使用正确的引擎来反射表结构
@@ -184,46 +184,46 @@ def as_dict(model_instance, follow=None):
 class DatabaseManager:
     """通用的数据库管理器，支持单数据库和多数据库配置"""
 
-    def __init__(self, database_uri: str, binds: Optional[Dict[str, str]] = None,
-                 echo: bool = False, pool_size: int = 5, max_overflow: int = 10):
-        """
-        初始化数据库管理器
+    def _create_engine(self, uri):
+        kwargs = {
+            "echo": self.echo,
+            "pool_pre_ping": True,
+        }
 
-        Args:
-            database_uri: 主数据库连接URI
-            binds: 多数据库绑定配置 {database_name: connection_uri}
-            echo: 是否打印SQL语句
-            pool_size: 连接池大小
-            max_overflow: 最大溢出连接数
-        """
+        # SQLite 默认使用 SingletonThreadPool，
+        # 不支持 pool_size / max_overflow
+        if not uri.startswith("sqlite"):
+            kwargs.update({
+                "pool_size": self.pool_size,
+                "max_overflow": self.max_overflow,
+            })
+
+        return create_engine(uri, **kwargs)
+
+    def __init__(
+            self,
+            database_uri: str,
+            binds: Optional[Dict[str, str]] = None,
+            echo: bool = False,
+            pool_size: int = 5,
+            max_overflow: int = 10
+    ):
         self.database_uri = database_uri
         self.binds = binds or {}
         self.echo = echo
+        self.pool_size = pool_size
+        self.max_overflow = max_overflow
 
-        # 创建主引擎
-        self.engine = create_engine(
-            database_uri,
-            echo=echo,
-            pool_size=pool_size,
-            max_overflow=max_overflow,
-            pool_pre_ping=True  # 连接前检查
-        )
+        self.engine = self._create_engine(database_uri)
 
-        # 创建绑定引擎
         self.bind_engines = {}
         for name, uri in self.binds.items():
-            self.bind_engines[name] = create_engine(
-                uri,
-                echo=echo,
-                pool_size=pool_size,
-                max_overflow=max_overflow,
-                pool_pre_ping=True
-            )
+            self.bind_engines[name] = self._create_engine(uri)
 
-        # 创建session工厂
-        self.SessionLocal = scoped_session(sessionmaker(bind=self.engine))
+        self.SessionLocal = scoped_session(
+            sessionmaker(bind=self.engine)
+        )
 
-        # 元数据字典
         self.metadatas = {None: MetaData()}
         for name in self.bind_engines.keys():
             self.metadatas[name] = MetaData()
