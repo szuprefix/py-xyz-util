@@ -1,9 +1,9 @@
 import os
-from sqlalchemy import create_engine, text, and_, MetaData, Table
+from sqlalchemy import create_engine, text, and_, not_, select, func, true, MetaData, Table
 from sqlalchemy.orm import sessionmaker, scoped_session
 from contextlib import contextmanager
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Set, Type, Union
+from typing import Any, Dict, List, Optional, Set, Type, Union, Tuple
 
 def flask_db(app, env_name='CONN'):
     db = app.extensions.get('sqlalchemy')
@@ -296,6 +296,9 @@ class DatabaseManager:
         metadata = self.metadatas.get(bind_key, self.metadatas[None])
 
         table = Table(table_name, metadata, autoload_with=engine, schema=schema)
+        # 保留原生 Table 返回值，同时提供 Django 风格的 objects manager。
+        # 每次反射时重新绑定，确保 bind_key 与当前调用一致。
+        table.objects = ModelManager(ModelOperations(self), table, bind_key)
         return table
 
     def close(self):
@@ -310,6 +313,34 @@ class ModelOperations:
 
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
+
+    def query(self, model: Type, bind_key: Optional[str] = None) -> 'QuerySet':
+        """创建一个 Django 风格、可链式组合的查询集。"""
+        return QuerySet(self, model, bind_key=bind_key)
+
+    @staticmethod
+    def model_name(model: Type) -> str:
+        """返回 ORM 模型类或 Table 的可读名称。"""
+        return getattr(model, '__name__', getattr(model, 'name', repr(model)))
+
+    @staticmethod
+    def column_names(model: Type) -> Tuple[str, ...]:
+        """返回 ORM 模型类或 Table 的列属性名。"""
+        if hasattr(model, '__mapper__'):
+            return tuple(model.__mapper__.column_attrs.keys())
+        if hasattr(model, 'c'):
+            return tuple(model.c.keys())
+        raise TypeError(f'不支持的查询对象: {model!r}')
+
+    @staticmethod
+    def model_field(model: Type, field_name: str) -> Any:
+        """取得 ORM 属性或 Table 列，不存在时返回 None。"""
+        if hasattr(model, '__mapper__'):
+            if field_name in model.__mapper__.column_attrs:
+                return getattr(model, field_name)
+        elif hasattr(model, 'c') and field_name in model.c:
+            return model.c[field_name]
+        return None
 
     def filter_fields(self, model: Type, data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -340,6 +371,10 @@ class ModelOperations:
         - in: 在列表中
         - like: 模糊匹配
         - ilike: 不区分大小写的模糊匹配
+        - contains / icontains: 包含
+        - startswith / istartswith: 以指定文本开头
+        - endswith / iendswith: 以指定文本结尾
+        - isnull: 是否为NULL
 
         Args:
             model: SQLAlchemy模型类
@@ -348,35 +383,50 @@ class ModelOperations:
         Returns:
             SQLAlchemy查询条件
         """
+        operators = {
+            'exact': lambda field, value: field == value,
+            'ne': lambda field, value: field != value,
+            'gt': lambda field, value: field > value,
+            'gte': lambda field, value: field >= value,
+            'lt': lambda field, value: field < value,
+            'lte': lambda field, value: field <= value,
+            'in': lambda field, value: field.in_(value),
+            'like': lambda field, value: field.like(value),
+            'ilike': lambda field, value: field.ilike(value),
+            'contains': lambda field, value: field.contains(value),
+            'icontains': lambda field, value: field.ilike(f'%{value}%'),
+            'startswith': lambda field, value: field.startswith(value),
+            'istartswith': lambda field, value: field.ilike(f'{value}%'),
+            'endswith': lambda field, value: field.endswith(value),
+            'iendswith': lambda field, value: field.ilike(f'%{value}'),
+            'isnull': lambda field, value: (
+                field.is_(None) if value else field.is_not(None)
+            ),
+        }
         conditions = []
         for key, value in filters.items():
-            field_name, _, op = key.partition('__')
-            field = getattr(model, field_name, None)
+            parts = key.split('__')
+            if len(parts) > 2:
+                raise ValueError(f'暂不支持跨关系过滤: {key!r}')
+
+            field_name = parts[0]
+            op = parts[1] if len(parts) == 2 else 'exact'
+            field = self.model_field(model, field_name)
 
             if field is None:
-                continue
+                raise ValueError(
+                    f'{self.model_name(model)} 没有字段 {field_name!r}'
+                )
+            if op not in operators:
+                raise ValueError(f'不支持过滤操作符 {op!r}: {key!r}')
+            if op == 'isnull' and not isinstance(value, bool):
+                raise ValueError(f'{key!r} 的值必须是 bool')
+            if op == 'in' and isinstance(value, (str, bytes)):
+                raise ValueError(f'{key!r} 的值必须是非字符串可迭代对象')
 
-            if op == 'gt':
-                conditions.append(field > value)
-            elif op == 'gte':
-                conditions.append(field >= value)
-            elif op == 'lt':
-                conditions.append(field < value)
-            elif op == 'lte':
-                conditions.append(field <= value)
-            elif op == 'ne':
-                conditions.append(field != value)
-            elif op == 'in':
-                conditions.append(field.in_(value))
-            elif op == 'like':
-                conditions.append(field.like(value))
-            elif op == 'ilike':
-                conditions.append(field.ilike(value))
-            else:
-                # 默认是等于
-                conditions.append(field == value)
+            conditions.append(operators[op](field, value))
 
-        return and_(True, *conditions) if conditions else and_(True)
+        return and_(*conditions) if conditions else true()
 
     def to_dict(self, model_instance: Any, follow: Optional[Set[str]] = None,
                 exclude: Optional[Set[str]] = None) -> Optional[Dict]:
@@ -482,3 +532,227 @@ class ModelOperations:
                 session.bulk_save_objects(instances)
                 total += len(instances)
         return total
+
+
+class ModelManager:
+    """Django 风格的模型管理器，每次调用都从新的 QuerySet 开始。"""
+
+    def __init__(self, operations: ModelOperations, model: Type,
+                 bind_key: Optional[str] = None):
+        self.operations = operations
+        self.model = model
+        self.bind_key = bind_key
+
+    def get_queryset(self) -> 'QuerySet':
+        return self.operations.query(self.model, self.bind_key)
+
+    def using(self, bind_key: Optional[str]) -> 'ModelManager':
+        """返回使用另一个数据库绑定的新 manager。"""
+        return type(self)(self.operations, self.model, bind_key)
+
+    def filter(self, **filters) -> 'QuerySet':
+        return self.get_queryset().filter(**filters)
+
+    def exclude(self, **filters) -> 'QuerySet':
+        return self.get_queryset().exclude(**filters)
+
+    def order_by(self, *fields) -> 'QuerySet':
+        return self.get_queryset().order_by(*fields)
+
+    def all(self) -> List[Dict]:
+        return self.get_queryset().all()
+
+    def first(self) -> Optional[Dict]:
+        return self.get_queryset().first()
+
+    def one(self) -> Dict:
+        return self.get_queryset().one()
+
+    def get(self, **filters) -> Dict:
+        return self.get_queryset().get(**filters)
+
+    def count(self) -> int:
+        return self.get_queryset().count()
+
+    def exists(self) -> bool:
+        return self.get_queryset().exists()
+
+    def values(self, *fields: str) -> List[Dict]:
+        return self.get_queryset().values(*fields)
+
+    def values_list(self, *fields: str, flat: bool = False) -> List[Any]:
+        return self.get_queryset().values_list(*fields, flat=flat)
+
+
+class QuerySet:
+    """轻量、不可变的 Django 风格 SQLAlchemy 查询构造器。
+
+    查询在 ``all``、``first``、``one``、``count`` 或 ``exists`` 等终结
+    方法被调用时才执行。结果默认转为字典，避免返回已脱离 session 的实例。
+    """
+
+    def __init__(self, operations: ModelOperations, model: Type,
+                 bind_key: Optional[str] = None,
+                 conditions: Tuple[Any, ...] = (),
+                 ordering: Tuple[Any, ...] = (),
+                 limit_value: Optional[int] = None,
+                 offset_value: Optional[int] = None):
+        self.operations = operations
+        self.model = model
+        self.bind_key = bind_key
+        self._conditions = conditions
+        self._ordering = ordering
+        self._limit_value = limit_value
+        self._offset_value = offset_value
+
+    def _clone(self, **changes) -> 'QuerySet':
+        values = {
+            'operations': self.operations,
+            'model': self.model,
+            'bind_key': self.bind_key,
+            'conditions': self._conditions,
+            'ordering': self._ordering,
+            'limit_value': self._limit_value,
+            'offset_value': self._offset_value,
+        }
+        values.update(changes)
+        return type(self)(**values)
+
+    def filter(self, **filters) -> 'QuerySet':
+        condition = self.operations.normalize_filter(self.model, filters)
+        if not filters:
+            return self
+        return self._clone(conditions=self._conditions + (condition,))
+
+    def exclude(self, **filters) -> 'QuerySet':
+        condition = self.operations.normalize_filter(self.model, filters)
+        if not filters:
+            return self
+        return self._clone(conditions=self._conditions + (not_(condition),))
+
+    def order_by(self, *fields) -> 'QuerySet':
+        ordering = []
+        for value in fields:
+            if not isinstance(value, str):
+                ordering.append(value)
+                continue
+
+            descending = value.startswith('-')
+            field_name = value[1:] if descending else value
+            field = self.operations.model_field(self.model, field_name)
+            if field is None:
+                raise ValueError(
+                    f'{self.operations.model_name(self.model)} '
+                    f'没有字段 {field_name!r}'
+                )
+            ordering.append(field.desc() if descending else field.asc())
+        return self._clone(ordering=tuple(ordering))
+
+    def limit(self, value: Optional[int]) -> 'QuerySet':
+        if value is not None and (not isinstance(value, int) or value < 0):
+            raise ValueError('limit 必须是非负整数或 None')
+        return self._clone(limit_value=value)
+
+    def offset(self, value: Optional[int]) -> 'QuerySet':
+        if value is not None and (not isinstance(value, int) or value < 0):
+            raise ValueError('offset 必须是非负整数或 None')
+        return self._clone(offset_value=value)
+
+    def _statement(self):
+        statement = select(self.model)
+        if self._conditions:
+            statement = statement.where(*self._conditions)
+        if self._ordering:
+            statement = statement.order_by(*self._ordering)
+        if self._limit_value is not None:
+            statement = statement.limit(self._limit_value)
+        if self._offset_value is not None:
+            statement = statement.offset(self._offset_value)
+        return statement
+
+    def _serialize(self, instance: Any) -> Dict:
+        return self.operations.to_dict(instance)
+
+    def _is_orm_model(self) -> bool:
+        return hasattr(self.model, '__mapper__')
+
+    def _result_dict(self, row: Any) -> Dict:
+        return dict(row._mapping)
+
+    def all(self) -> List[Dict]:
+        with self.operations.db_manager.get_session(self.bind_key) as session:
+            result = session.execute(self._statement())
+            if self._is_orm_model():
+                return [self._serialize(item) for item in result.scalars()]
+            return [self._result_dict(row) for row in result]
+
+    def first(self) -> Optional[Dict]:
+        limit_value = 1 if self._limit_value is None else min(self._limit_value, 1)
+        queryset = self.limit(limit_value)
+        with self.operations.db_manager.get_session(self.bind_key) as session:
+            result = session.execute(queryset._statement())
+            if self._is_orm_model():
+                instance = result.scalars().first()
+                return self._serialize(instance) if instance is not None else None
+            row = result.first()
+            return self._result_dict(row) if row is not None else None
+
+    def one(self) -> Dict:
+        with self.operations.db_manager.get_session(self.bind_key) as session:
+            result = session.execute(self._statement())
+            if self._is_orm_model():
+                return self._serialize(result.scalars().one())
+            return self._result_dict(result.one())
+
+    def get(self, **filters) -> Dict:
+        """追加过滤条件并返回唯一记录，否则抛出 SQLAlchemy 标准异常。"""
+        return self.filter(**filters).one()
+
+    def count(self) -> int:
+        count_statement = select(func.count()).select_from(self.model)
+        if self._conditions:
+            count_statement = count_statement.where(*self._conditions)
+        with self.operations.db_manager.get_session(self.bind_key) as session:
+            return session.execute(count_statement).scalar_one()
+
+    def exists(self) -> bool:
+        statement = select(self.model).where(*self._conditions).limit(1)
+        with self.operations.db_manager.get_session(self.bind_key) as session:
+            return session.execute(statement).first() is not None
+
+    def _validate_value_fields(self, fields: Tuple[str, ...]) -> None:
+        column_names = self.operations.column_names(self.model)
+        for field_name in fields:
+            if field_name not in column_names:
+                raise ValueError(
+                    f'{self.operations.model_name(self.model)} '
+                    f'没有字段 {field_name!r}'
+                )
+
+    def values(self, *fields: str) -> List[Dict]:
+        field_names = fields or self.operations.column_names(self.model)
+        self._validate_value_fields(field_names)
+        columns = [
+            self.operations.model_field(self.model, name)
+            for name in field_names
+        ]
+        statement = select(*columns)
+        if self._conditions:
+            statement = statement.where(*self._conditions)
+        if self._ordering:
+            statement = statement.order_by(*self._ordering)
+        if self._limit_value is not None:
+            statement = statement.limit(self._limit_value)
+        if self._offset_value is not None:
+            statement = statement.offset(self._offset_value)
+        with self.operations.db_manager.get_session(self.bind_key) as session:
+            return [dict(row._mapping) for row in session.execute(statement)]
+
+    def values_list(self, *fields: str, flat: bool = False) -> List[Any]:
+        if flat and len(fields) != 1:
+            raise ValueError('flat=True 时必须且只能指定一个字段')
+        rows = self.values(*fields)
+        if flat:
+            return [row[fields[0]] for row in rows]
+        field_names = fields or self.operations.column_names(self.model)
+        return [tuple(row[name] for name in field_names) for row in rows]
