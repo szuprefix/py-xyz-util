@@ -3,7 +3,7 @@ from sqlalchemy import create_engine, text, and_, not_, select, func, true, Meta
 from sqlalchemy.orm import sessionmaker, scoped_session
 from contextlib import contextmanager
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Set, Type, Union, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Set, Type, Union, Tuple
 
 def flask_db(app, env_name='CONN'):
     db = app.extensions.get('sqlalchemy')
@@ -617,6 +617,54 @@ class QuerySet:
         }
         values.update(changes)
         return type(self)(**values)
+
+    def __iter__(self) -> Iterator[Dict]:
+        """执行查询并迭代字典结果。"""
+        return iter(self.all())
+
+    def __getitem__(self, key: Union[int, slice]) -> Union[Dict, 'QuerySet', List[Dict]]:
+        """支持 Django 风格的索引和切片查询。"""
+        if isinstance(key, int):
+            if key < 0:
+                raise ValueError('QuerySet 不支持负索引')
+            if self._limit_value is not None and key >= self._limit_value:
+                raise IndexError('QuerySet index out of range')
+
+            offset = (self._offset_value or 0) + key
+            item = self._clone(offset_value=offset, limit_value=1).first()
+            if item is None:
+                raise IndexError('QuerySet index out of range')
+            return item
+
+        if not isinstance(key, slice):
+            raise TypeError('QuerySet 索引必须是整数或切片')
+
+        start = 0 if key.start is None else key.start
+        stop = key.stop
+        if start < 0 or (stop is not None and stop < 0):
+            raise ValueError('QuerySet 不支持负索引切片')
+        if stop is not None and stop < start:
+            stop = start
+
+        # 与 Django 一致，带步长的切片会立即求值并返回列表。
+        if key.step is not None and key.step != 1:
+            return self.all()[key]
+
+        base_offset = self._offset_value or 0
+        new_offset = base_offset + start
+        available = None
+        if self._limit_value is not None:
+            available = max(self._limit_value - start, 0)
+
+        requested = None if stop is None else max(stop - start, 0)
+        if available is None:
+            new_limit = requested
+        elif requested is None:
+            new_limit = available
+        else:
+            new_limit = min(available, requested)
+
+        return self._clone(offset_value=new_offset, limit_value=new_limit)
 
     def filter(self, **filters) -> 'QuerySet':
         condition = self.operations.normalize_filter(self.model, filters)
