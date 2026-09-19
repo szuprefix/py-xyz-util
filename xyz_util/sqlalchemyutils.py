@@ -180,6 +180,12 @@ def as_dict(model_instance, follow=None):
 
     return result
 
+def load_config():
+    from .datautils import str2dict
+    conn = os.getenv('SQLALCHEMY_URI', 'mysql+pymysql://localhost')
+    bs = str2dict(os.getenv('SQLALCHEMY_BINDS', ''))
+    return conn, bs
+
 
 class DatabaseManager:
     """通用的数据库管理器，支持单数据库和多数据库配置"""
@@ -202,12 +208,14 @@ class DatabaseManager:
 
     def __init__(
             self,
-            database_uri: str,
+            database_uri: str = None,
             binds: Optional[Dict[str, str]] = None,
             echo: bool = False,
             pool_size: int = 5,
             max_overflow: int = 10
     ):
+        if not database_uri and not binds:
+            database_uri, binds = load_config()
         self.database_uri = database_uri
         self.binds = binds or {}
         self.echo = echo
@@ -582,6 +590,49 @@ class ModelManager:
 
     def values_list(self, *fields: str, flat: bool = False) -> List[Any]:
         return self.get_queryset().values_list(*fields, flat=flat)
+
+    def _create_with_session(self, session, data: Dict[str, Any]) -> Dict:
+        """使用已有 session 创建一条记录并返回字典。"""
+        if hasattr(self.model, '__mapper__'):
+            instance = self.model(**data)
+            session.add(instance)
+            session.flush()
+            return self.operations.to_dict(instance)
+
+        if not hasattr(self.model, 'insert'):
+            raise TypeError(f'不支持的模型对象: {self.model!r}')
+
+        result = session.execute(self.model.insert().values(**data))
+        primary_key = tuple(self.model.primary_key.columns)
+        inserted_key = tuple(result.inserted_primary_key)
+
+        if primary_key and all(value is not None for value in inserted_key):
+            conditions = [
+                column == value
+                for column, value in zip(primary_key, inserted_key)
+            ]
+            row = session.execute(
+                select(self.model).where(*conditions)
+            ).one()
+            return dict(row._mapping)
+
+        # 没有可用于重新查询的主键时，至少返回调用方提交的数据。
+        return dict(data)
+
+    def create(self, **data) -> Dict:
+        """创建一条记录，返回包含主键和数据库默认值的字典。"""
+        with self.operations.db_manager.get_session(self.bind_key) as session:
+            return self._create_with_session(session, data)
+
+    def bulk_create(self, data_list: List[Dict[str, Any]]) -> List[Dict]:
+        """在一个事务中创建多条记录，并按输入顺序返回字典列表。"""
+        if not data_list:
+            return []
+        with self.operations.db_manager.get_session(self.bind_key) as session:
+            return [
+                self._create_with_session(session, dict(data))
+                for data in data_list
+            ]
 
 
 class QuerySet:
