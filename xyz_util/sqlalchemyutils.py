@@ -542,6 +542,60 @@ class ModelOperations:
         return total
 
 
+class Aggregate:
+    """聚合表达式基类。"""
+
+    function_name = None
+    field_required = True
+
+    def __init__(self, field: Optional[str] = None,
+                 distinct: bool = False, default: Any = None):
+        if self.field_required and not field:
+            raise ValueError(f'{type(self).__name__} 必须指定字段')
+        self.field = None if field == '*' else field
+        self.distinct = distinct
+        self.default = default
+
+    def expression(self, operations: ModelOperations, model: Type):
+        if self.field is None:
+            argument = None
+        else:
+            argument = operations.model_field(model, self.field)
+            if argument is None:
+                raise ValueError(
+                    f'{operations.model_name(model)} 没有字段 {self.field!r}'
+                )
+            if self.distinct:
+                argument = argument.distinct()
+
+        function = getattr(func, self.function_name)
+        expression = function() if argument is None else function(argument)
+        if self.default is not None:
+            expression = func.coalesce(expression, self.default)
+        return expression
+
+
+class Count(Aggregate):
+    function_name = 'count'
+    field_required = False
+
+
+class Sum(Aggregate):
+    function_name = 'sum'
+
+
+class Avg(Aggregate):
+    function_name = 'avg'
+
+
+class Min(Aggregate):
+    function_name = 'min'
+
+
+class Max(Aggregate):
+    function_name = 'max'
+
+
 class ModelManager:
     """Django 风格的模型管理器，每次调用都从新的 QuerySet 开始。"""
 
@@ -590,6 +644,12 @@ class ModelManager:
 
     def values_list(self, *fields: str, flat: bool = False) -> List[Any]:
         return self.get_queryset().values_list(*fields, flat=flat)
+
+    def aggregate(self, **aggregates) -> Dict:
+        return self.get_queryset().aggregate(**aggregates)
+
+    def group_by(self, *fields: str) -> 'GroupedQuerySet':
+        return self.get_queryset().group_by(*fields)
 
     def _create_with_session(self, session, data: Dict[str, Any]) -> Dict:
         """使用已有 session 创建一条记录并返回字典。"""
@@ -819,6 +879,46 @@ class QuerySet:
         with self.operations.db_manager.get_session(self.bind_key) as session:
             return session.execute(statement).first() is not None
 
+    def _ensure_unsliced_for_aggregation(self) -> None:
+        if self._limit_value is not None or self._offset_value is not None:
+            raise ValueError('暂不支持对已执行 limit/offset 的 QuerySet 聚合')
+
+    def _aggregate_columns(self, aggregates: Dict[str, Aggregate]) -> List[Any]:
+        if not aggregates:
+            raise ValueError('至少需要指定一个聚合表达式')
+
+        columns = []
+        for alias, aggregate in aggregates.items():
+            if not isinstance(alias, str) or not alias:
+                raise ValueError('聚合别名必须是非空字符串')
+            if not isinstance(aggregate, Aggregate):
+                raise TypeError(
+                    f'聚合项 {alias!r} 必须是 Aggregate 表达式'
+                )
+            columns.append(
+                aggregate.expression(self.operations, self.model).label(alias)
+            )
+        return columns
+
+    def aggregate(self, **aggregates) -> Dict:
+        """对当前过滤结果执行聚合，返回单个字典。"""
+        self._ensure_unsliced_for_aggregation()
+        statement = select(*self._aggregate_columns(aggregates)).select_from(
+            self.model
+        )
+        if self._conditions:
+            statement = statement.where(*self._conditions)
+        with self.operations.db_manager.get_session(self.bind_key) as session:
+            return dict(session.execute(statement).one()._mapping)
+
+    def group_by(self, *fields: str) -> 'GroupedQuerySet':
+        """按一个或多个字段分组，等待 aggregate() 执行统计。"""
+        self._ensure_unsliced_for_aggregation()
+        if not fields:
+            raise ValueError('group_by() 至少需要指定一个字段')
+        self._validate_value_fields(tuple(fields))
+        return GroupedQuerySet(self, tuple(fields))
+
     def _validate_value_fields(self, fields: Tuple[str, ...]) -> None:
         column_names = self.operations.column_names(self.model)
         for field_name in fields:
@@ -855,3 +955,37 @@ class QuerySet:
             return [row[fields[0]] for row in rows]
         field_names = fields or self.operations.column_names(self.model)
         return [tuple(row[name] for name in field_names) for row in rows]
+
+
+class GroupedQuerySet:
+    """保存分组字段，并在 aggregate() 时执行查询。"""
+
+    def __init__(self, queryset: QuerySet, fields: Tuple[str, ...]):
+        self.queryset = queryset
+        self.fields = fields
+
+    def aggregate(self, **aggregates) -> List[Dict]:
+        collisions = set(self.fields).intersection(aggregates)
+        if collisions:
+            names = ', '.join(sorted(collisions))
+            raise ValueError(f'聚合别名不能覆盖分组字段: {names}')
+
+        queryset = self.queryset
+        group_columns = [
+            queryset.operations.model_field(queryset.model, field)
+            for field in self.fields
+        ]
+        aggregate_columns = queryset._aggregate_columns(aggregates)
+        statement = select(
+            *group_columns, *aggregate_columns
+        ).select_from(queryset.model)
+        if queryset._conditions:
+            statement = statement.where(*queryset._conditions)
+        statement = statement.group_by(*group_columns)
+
+        with queryset.operations.db_manager.get_session(
+                queryset.bind_key) as session:
+            return [
+                dict(row._mapping)
+                for row in session.execute(statement)
+            ]
