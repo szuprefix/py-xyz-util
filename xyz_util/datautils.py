@@ -550,3 +550,15 @@ def reorder(dl, new_orders):
         if a in new_orders:
             continue
         yield a
+
+
+def try_json(v):
+    if isinstance(v, str):
+        if (v.startswith('[') and v.endswith(']')) or (v.startswith('{') and v.endswith('}')):
+            try:
+                v = json.loads(v)
+            except Exception as e:
+                import logging
+                logging.warning(f'json error:{e} value: {v}')
+            return v
+    return v
