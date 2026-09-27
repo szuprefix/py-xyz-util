@@ -50,7 +50,7 @@ class JsonEditTextarea(widgets.Textarea):
         elif isinstance(value, string_types):
             return value
         else:
-            value = json.dumps(value, indent=2, cls=JSONEncoder)
+            value = json.dumps(value, indent=2, cls=JSONEncoder, ensure_ascii=False)
         return value
 
     def render(self, name, value, attrs=None, renderer=None):
