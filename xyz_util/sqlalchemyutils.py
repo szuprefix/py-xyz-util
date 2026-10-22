@@ -694,6 +694,110 @@ class ModelManager:
                 for data in data_list
             ]
 
+    def _validate_write_fields(self, data: Dict[str, Any], name: str) -> None:
+        column_names = self.operations.column_names(self.model)
+        for field_name in data:
+            if '__' in field_name:
+                raise ValueError(f'{name} 只支持精确字段: {field_name!r}')
+            if field_name not in column_names:
+                raise ValueError(
+                    f'{self.operations.model_name(self.model)} '
+                    f'没有字段 {field_name!r}'
+                )
+
+    @staticmethod
+    def _resolve_write_values(data: Dict[str, Any]) -> Dict[str, Any]:
+        """与 Django 类似，仅在实际写入时计算 callable 默认值。"""
+        return {
+            key: value() if callable(value) else value
+            for key, value in data.items()
+        }
+
+    def _find_with_session(self, session, lookup: Dict[str, Any]):
+        condition = self.operations.normalize_filter(self.model, lookup)
+        statement = select(self.model).where(condition)
+        result = session.execute(statement)
+        if hasattr(self.model, '__mapper__'):
+            return result.scalars().one_or_none(), condition
+        return result.one_or_none(), condition
+
+    def get_or_create(self, defaults: Optional[Dict[str, Any]] = None,
+                      **lookup) -> Tuple[Dict, bool]:
+        """查找记录；不存在时创建，返回 ``(记录字典, 是否新建)``。"""
+        if not lookup:
+            raise ValueError('get_or_create() 至少需要一个 lookup 字段')
+        defaults = dict(defaults or {})
+        self._validate_write_fields(lookup, 'lookup')
+        self._validate_write_fields(defaults, 'defaults')
+
+        with self.operations.db_manager.get_session(self.bind_key) as session:
+            found, _ = self._find_with_session(session, lookup)
+            if found is not None:
+                if hasattr(self.model, '__mapper__'):
+                    return self.operations.to_dict(found), False
+                return dict(found._mapping), False
+
+            create_data = {
+                **lookup,
+                **self._resolve_write_values(defaults),
+            }
+            return self._create_with_session(session, create_data), True
+
+    def update_or_insert(self, lookup: Dict[str, Any],
+                         defaults: Optional[Dict[str, Any]] = None
+                         ) -> Tuple[Dict, bool]:
+        """按 lookup 更新或插入，返回 ``(记录字典, 是否新建)``。"""
+        if not lookup:
+            raise ValueError('update_or_insert() 至少需要一个 lookup 字段')
+        lookup = dict(lookup)
+        defaults = dict(defaults or {})
+        self._validate_write_fields(lookup, 'lookup')
+        self._validate_write_fields(defaults, 'defaults')
+
+        with self.operations.db_manager.get_session(self.bind_key) as session:
+            found, condition = self._find_with_session(session, lookup)
+            resolved_defaults = self._resolve_write_values(defaults)
+
+            if found is None:
+                create_data = {**lookup, **resolved_defaults}
+                return self._create_with_session(session, create_data), True
+
+            if hasattr(self.model, '__mapper__'):
+                for key, value in resolved_defaults.items():
+                    setattr(found, key, value)
+                session.flush()
+                return self.operations.to_dict(found), False
+
+            primary_key = tuple(self.model.primary_key.columns)
+            if primary_key:
+                update_condition = and_(*[
+                    column == found._mapping[column.name]
+                    for column in primary_key
+                ])
+                refreshed_condition = and_(*[
+                    column == resolved_defaults.get(
+                        column.name, found._mapping[column.name]
+                    )
+                    for column in primary_key
+                ])
+            else:
+                update_condition = condition
+                refreshed_lookup = {**lookup, **resolved_defaults}
+                refreshed_condition = self.operations.normalize_filter(
+                    self.model, refreshed_lookup
+                )
+
+            if resolved_defaults:
+                session.execute(
+                    self.model.update().where(update_condition).values(
+                        **resolved_defaults
+                    )
+                )
+            row = session.execute(
+                select(self.model).where(refreshed_condition)
+            ).one()
+            return dict(row._mapping), False
+
 
 class QuerySet:
     """轻量、不可变的 Django 风格 SQLAlchemy 查询构造器。

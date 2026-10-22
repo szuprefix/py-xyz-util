@@ -63,13 +63,14 @@ class FC():
 
 
 
-    def invoke(self, function_name=os.getenv('FC_FUNCTION_NAME'), type='Sync', pass_common_header_prefix=None, **kwargs):
+    def invoke(self, function_name=os.getenv('FC_FUNCTION_NAME'), type='Sync', invoke_headers={}, **kwargs):
         from alibabacloud_fc20230330.models import InvokeFunctionRequest, InvokeFunctionHeaders
         from alibabacloud_tea_util.models import RuntimeOptions
         req = InvokeFunctionRequest(**kwargs)
         headers = InvokeFunctionHeaders(
             common_headers=get_common_headers(),
-            x_fc_invocation_type=type
+            x_fc_invocation_type=type,
+            ** invoke_headers
         )
         return self.client.invoke_function_with_options(function_name, req, headers, RuntimeOptions())
 
