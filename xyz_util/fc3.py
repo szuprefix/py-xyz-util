@@ -49,18 +49,31 @@ class FC():
                  ):
         from alibabacloud_fc20230330.client import Client
         from alibabacloud_tea_openapi.models import Config
+        from alibabacloud_credentials.client import Client as CredentialClient
+        from alibabacloud_credentials.models import Config as CredentialConfig
 
+        if key_id:
+            cc = dict(
+                access_key_id=key_id,
+                access_key_secret=key_secret,
+                security_token=token
+            )
+        else:
+            cc = dict(
+                credential=CredentialClient(
+                CredentialConfig(
+                    type="ecs_ram_role",
+                    role_name=os.getenv('FC_ROLE_NAME'),
+                )
+            )
+            )
         config = Config(
-            access_key_id=key_id,
-            access_key_secret=key_secret,
-            security_token=token,
+            **cc,
             endpoint=f"{account_id}.{region}.fc.aliyuncs.com",
             read_timeout=1000*timeout,
             connect_timeout=1000*timeout
         )
-
         self.client = Client(config)
-
 
 
     def invoke(self, function_name=os.getenv('FC_FUNCTION_NAME'), type='Sync', invoke_headers={}, **kwargs):
@@ -96,6 +109,11 @@ class FC():
         from alibabacloud_fc20230330.models import GetAsyncTaskRequest
         req = GetAsyncTaskRequest(**kwargs)
         return self.client.get_async_task(function_name, tid, req)
+
+    def list_async_tasks(self, function_name=os.getenv('FC_FUNCTION_NAME'), **kwargs):
+        from alibabacloud_fc20230330.models import ListAsyncTasksRequest
+        req = ListAsyncTasksRequest(**kwargs)
+        return self.client.list_async_tasks(function_name, req)
 
     @classmethod
     def get_instance(cls):
